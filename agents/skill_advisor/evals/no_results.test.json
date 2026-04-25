@@ -1,0 +1,48 @@
+{
+  "eval_set_id": "skill_advisor_no_results",
+  "name": "Skill Advisor - No Results Found",
+  "description": "Validates that the Skill Advisor handles gracefully when semantic search returns no matching skills for an obscure query.",
+  "eval_cases": [
+    {
+      "eval_id": "nonexistent_domain",
+      "conversation": [
+        {
+          "invocation_id": "e-sa-030",
+          "user_content": {
+            "parts": [
+              {
+                "text": "Recommend skills for quantum teleportation firmware debugging."
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "I searched the skills graph but could not find skills closely matching quantum teleportation firmware debugging. The marketplace does not currently have skills in this specific domain. Consider broadening your search to related areas like embedded systems debugging or hardware testing."
+              }
+            ],
+            "role": "model"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "name": "semantic_search_skills",
+                "args": {
+                  "query": "quantum teleportation firmware debugging",
+                  "top_k": 10
+                }
+              }
+            ],
+            "intermediate_responses": []
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "skill_advisor",
+        "user_id": "eval_user",
+        "state": {}
+      }
+    }
+  ]
+}

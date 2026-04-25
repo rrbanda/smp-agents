@@ -1,0 +1,59 @@
+{
+  "eval_set_id": "skill_advisor_explore_alternatives",
+  "name": "Skill Advisor - Explore Alternatives",
+  "description": "Validates that the Skill Advisor uses find_skill, get_skill_alternatives, and explore_skill_neighborhood to surface interchangeable skills.",
+  "eval_cases": [
+    {
+      "eval_id": "alternatives_for_code_review",
+      "conversation": [
+        {
+          "invocation_id": "e-sa-010",
+          "user_content": {
+            "parts": [
+              {
+                "text": "What alternatives exist for the code-review skill? I want to compare options."
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "I found the code-review skill in the graph. Here are the alternative skills connected via ALTERNATIVE_TO relationships, along with neighboring skills for broader context."
+              }
+            ],
+            "role": "model"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "name": "find_skill",
+                "args": {
+                  "identifier": "code-review"
+                }
+              },
+              {
+                "name": "get_skill_alternatives",
+                "args": {
+                  "identifier": "code-review"
+                }
+              },
+              {
+                "name": "explore_skill_neighborhood",
+                "args": {
+                  "identifier": "code-review"
+                }
+              }
+            ],
+            "intermediate_responses": []
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "skill_advisor",
+        "user_id": "eval_user",
+        "state": {}
+      }
+    }
+  ]
+}

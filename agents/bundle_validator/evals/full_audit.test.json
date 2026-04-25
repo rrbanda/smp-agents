@@ -1,0 +1,84 @@
+{
+  "eval_set_id": "bundle_validator_full_audit",
+  "name": "Bundle Validator - Full Bundle Audit",
+  "description": "Validates that the Bundle Validator performs a comprehensive audit covering existence, dependencies, alternatives, and complementary suggestions using all available tools.",
+  "eval_cases": [
+    {
+      "eval_id": "full_audit_three_skills",
+      "conversation": [
+        {
+          "invocation_id": "e-bv-030",
+          "user_content": {
+            "parts": [
+              {
+                "text": "Run a full audit on this bundle: deploy-to-k8s, helm-chart-review, k8s-troubleshooting. Check dependencies, alternatives, and suggest any missing complementary skills."
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "Full audit complete for bundle [deploy-to-k8s, helm-chart-review, k8s-troubleshooting].\n\nExistence: All 3 skills found in the graph.\nDependencies: deploy-to-k8s depends on helm-chart-review (already in bundle). No missing dependencies.\nAlternatives: No redundant ALTERNATIVE_TO pairs detected.\nSuggestions: Consider adding container-security-scan which COMPLEMENTS deploy-to-k8s.\n\nOverall: VALID with 1 suggestion."
+              }
+            ],
+            "role": "model"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "name": "find_skill",
+                "args": {
+                  "identifier": "deploy-to-k8s"
+                }
+              },
+              {
+                "name": "find_skill",
+                "args": {
+                  "identifier": "helm-chart-review"
+                }
+              },
+              {
+                "name": "find_skill",
+                "args": {
+                  "identifier": "k8s-troubleshooting"
+                }
+              },
+              {
+                "name": "get_skill_dependencies",
+                "args": {
+                  "identifier": "deploy-to-k8s"
+                }
+              },
+              {
+                "name": "get_skill_alternatives",
+                "args": {
+                  "identifier": "deploy-to-k8s"
+                }
+              },
+              {
+                "name": "get_complementary_skills",
+                "args": {
+                  "identifier": "deploy-to-k8s"
+                }
+              },
+              {
+                "name": "query_skill_graph",
+                "args": {
+                  "cypher_query": "MATCH (a:Skill)-[:ALTERNATIVE_TO]-(b:Skill) WHERE (a.name IN $names OR a.id IN $names) AND (b.name IN $names OR b.id IN $names) RETURN coalesce(a.name, a.id) AS skill_a, coalesce(b.name, b.id) AS skill_b",
+                  "parameters": "{\"names\": [\"deploy-to-k8s\", \"helm-chart-review\", \"k8s-troubleshooting\"]}"
+                }
+              }
+            ],
+            "intermediate_responses": []
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "bundle_validator",
+        "user_id": "eval_user",
+        "state": {}
+      }
+    }
+  ]
+}

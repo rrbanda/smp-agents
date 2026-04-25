@@ -1,0 +1,56 @@
+{
+  "eval_set_id": "skill_builder_create_and_publish",
+  "name": "Skill Builder - Create and Publish Full Workflow",
+  "description": "Validates that the Skill Builder performs the full workflow: generate a skill spec, validate it, and publish it to the OCI registry.",
+  "eval_cases": [
+    {
+      "eval_id": "create_validate_publish",
+      "conversation": [
+        {
+          "invocation_id": "e-sb-020",
+          "user_content": {
+            "parts": [
+              {
+                "text": "Create a skill for reviewing Terraform configurations for security best practices. Once it looks good, validate and publish it as version 1.0.0."
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "I generated the terraform-security-review skill, validated it successfully, and published it to the OCI registry as version 1.0.0.\n\n```markdown\n---\nname: terraform-security-review\ndescription: Reviews Terraform configurations for security best practices, compliance, and misconfigurations.\n---\n\n# Terraform Security Review Instructions\n\n## Step 1: Parse Configuration\n- Identify all resource blocks, data sources, and modules\n- Map provider configurations and backend settings\n\n## Step 2: Security Checks\n- Verify no hardcoded secrets in variables or locals\n- Check S3 buckets for public access blocks\n- Verify encryption at rest is enabled for databases and storage\n- Check security groups for overly permissive rules (0.0.0.0/0)\n- Verify IAM policies follow least privilege principle\n\n## Step 3: Compliance\n- Check tagging requirements are met\n- Verify logging and monitoring resources exist\n- Ensure state file is stored securely with encryption\n\n## Step 4: Report\nFor each finding: severity, resource, issue, and remediation.\n```\n\nPublished to: registry/namespace/skills/terraform-security-review:1.0.0"
+              }
+            ],
+            "role": "model"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "name": "validate_skill_yaml",
+                "args": {
+                  "skill_content": "---\nname: terraform-security-review\ndescription: Reviews Terraform configurations for security best practices, compliance, and misconfigurations.\n---\n\n# Terraform Security Review Instructions\n..."
+                }
+              },
+              {
+                "name": "publish_skill_to_oci",
+                "args": {
+                  "skill_name": "terraform-security-review",
+                  "version": "1.0.0",
+                  "skill_content": "---\nname: terraform-security-review\ndescription: Reviews Terraform configurations for security best practices, compliance, and misconfigurations.\n---\n\n# Terraform Security Review Instructions\n...",
+                  "author": "smp-agent"
+                }
+              }
+            ],
+            "intermediate_responses": []
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "skill_builder",
+        "user_id": "eval_user",
+        "state": {}
+      }
+    }
+  ]
+}

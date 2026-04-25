@@ -1,0 +1,53 @@
+{
+  "eval_set_id": "bundle_validator_missing_skill",
+  "name": "Bundle Validator - Missing Skill Detection",
+  "description": "Validates that the Bundle Validator correctly detects when a skill in the bundle does not exist in the knowledge graph.",
+  "eval_cases": [
+    {
+      "eval_id": "bundle_with_nonexistent_skill",
+      "conversation": [
+        {
+          "invocation_id": "e-bv-010",
+          "user_content": {
+            "parts": [
+              {
+                "text": "Validate this skill bundle: code-review, nonexistent-skill-xyz"
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "Bundle validation complete for [code-review, nonexistent-skill-xyz].\n\nFindings:\n- code-review: Found in graph. Valid.\n- nonexistent-skill-xyz: NOT FOUND in the knowledge graph. This skill does not exist in the marketplace.\n\nOverall status: INVALID — 1 error (missing skill)."
+              }
+            ],
+            "role": "model"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "name": "find_skill",
+                "args": {
+                  "identifier": "code-review"
+                }
+              },
+              {
+                "name": "find_skill",
+                "args": {
+                  "identifier": "nonexistent-skill-xyz"
+                }
+              }
+            ],
+            "intermediate_responses": []
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "bundle_validator",
+        "user_id": "eval_user",
+        "state": {}
+      }
+    }
+  ]
+}

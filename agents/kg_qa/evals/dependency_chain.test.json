@@ -1,0 +1,54 @@
+{
+  "eval_set_id": "kg_qa_dependency_chain",
+  "name": "KG Q&A - Dependency Chain Analysis",
+  "description": "Validates that the KG Q&A agent uses find_skill and get_skill_dependencies to answer questions about skill dependency chains.",
+  "eval_cases": [
+    {
+      "eval_id": "deploy_k8s_dependencies",
+      "conversation": [
+        {
+          "invocation_id": "e-kq-010",
+          "user_content": {
+            "parts": [
+              {
+                "text": "What does the deploy-to-k8s skill depend on? Show me its full dependency chain."
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "I looked up deploy-to-k8s in the knowledge graph and traced its dependency chain. The skill depends on other skills through DEPENDS_ON relationships at various depths."
+              }
+            ],
+            "role": "model"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "name": "find_skill",
+                "args": {
+                  "identifier": "deploy-to-k8s"
+                }
+              },
+              {
+                "name": "get_skill_dependencies",
+                "args": {
+                  "identifier": "deploy-to-k8s",
+                  "max_depth": 5
+                }
+              }
+            ],
+            "intermediate_responses": []
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "kg_qa",
+        "user_id": "eval_user",
+        "state": {}
+      }
+    }
+  ]
+}

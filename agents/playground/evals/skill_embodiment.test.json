@@ -1,0 +1,43 @@
+{
+  "eval_set_id": "playground_skill_embodiment",
+  "name": "Playground - Skill Embodiment",
+  "description": "Validates that the Playground agent reads the active skill specification from session state and responds as that skill when a user asks a skill-relevant question.",
+  "eval_cases": [
+    {
+      "eval_id": "embody_code_review_skill",
+      "conversation": [
+        {
+          "invocation_id": "e-pg-010",
+          "user_content": {
+            "parts": [
+              {
+                "text": "Review this Python function for quality issues:\n\ndef calculate(x,y):\n  result = x/y\n  return result"
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "As the code-review skill, here is my review of your Python function:\n\n1. Missing error handling: Division by zero is not handled. Add a check for y == 0.\n2. Missing type hints: Parameters x and y lack type annotations.\n3. Missing docstring: The function has no documentation.\n4. Naming: Consider a more descriptive function name than 'calculate'.\n\nSeverity: 1 major (division by zero), 3 minor (style/docs)."
+              }
+            ],
+            "role": "model"
+          },
+          "intermediate_data": {
+            "tool_uses": [],
+            "intermediate_responses": []
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "playground",
+        "user_id": "eval_user",
+        "state": {
+          "active_skill_spec": "---\nname: code-review\ndescription: Reviews code changes for quality, security, and adherence to team coding standards.\n---\n\n# Code Review Instructions\n\nWhen asked to review code, check for:\n1. Error handling gaps\n2. Security vulnerabilities\n3. Code quality and readability\n4. Missing documentation\n\nFor each finding report severity (critical/major/minor/suggestion) and a recommendation.",
+          "skill_catalog": "[{\"name\": \"code-review\", \"description\": \"Reviews code for quality\"}]"
+        }
+      }
+    }
+  ]
+}

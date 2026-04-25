@@ -1,0 +1,53 @@
+{
+  "eval_set_id": "skill_builder_invalid_skill",
+  "name": "Skill Builder - Invalid Skill Validation",
+  "description": "Validates that the Skill Builder catches validation errors when the user provides an invalid skill name (uppercase, spaces) and surfaces the errors to the user.",
+  "eval_cases": [
+    {
+      "eval_id": "uppercase_skill_name",
+      "conversation": [
+        {
+          "invocation_id": "e-sb-010",
+          "user_content": {
+            "parts": [
+              {
+                "text": "Create a skill called 'My Code Linter' that checks Python code for PEP8 compliance."
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "I generated a skill specification and ran validation. The validation found an error: the name 'My Code Linter' is not valid kebab-case. Skill names must be lowercase with hyphens only (e.g., 'my-code-linter'). Here is the corrected specification:\n\n```markdown\n---\nname: my-code-linter\ndescription: Checks Python code for PEP8 compliance and style issues.\n---\n\n# My Code Linter Instructions\n\n1. Analyze the provided Python code\n2. Check against PEP8 style guidelines\n3. Report violations with line numbers and suggested fixes\n```\n\nShall I validate and publish this corrected version?"
+              }
+            ],
+            "role": "model"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "name": "validate_skill_yaml",
+                "args": {
+                  "skill_content": "---\nname: My Code Linter\ndescription: Checks Python code for PEP8 compliance and style issues.\n---\n\n# My Code Linter Instructions\n\n1. Analyze the provided Python code\n2. Check against PEP8 style guidelines\n3. Report violations with line numbers and suggested fixes"
+                }
+              },
+              {
+                "name": "validate_skill_yaml",
+                "args": {
+                  "skill_content": "---\nname: my-code-linter\ndescription: Checks Python code for PEP8 compliance and style issues.\n---\n\n# My Code Linter Instructions\n\n1. Analyze the provided Python code\n2. Check against PEP8 style guidelines\n3. Report violations with line numbers and suggested fixes"
+                }
+              }
+            ],
+            "intermediate_responses": []
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "skill_builder",
+        "user_id": "eval_user",
+        "state": {}
+      }
+    }
+  ]
+}

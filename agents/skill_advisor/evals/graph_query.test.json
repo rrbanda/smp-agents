@@ -1,0 +1,48 @@
+{
+  "eval_set_id": "skill_advisor_graph_query",
+  "name": "Skill Advisor - Direct Graph Query",
+  "description": "Validates that the Skill Advisor can fall back to query_skill_graph for domain-specific Cypher queries when structured tool helpers are insufficient.",
+  "eval_cases": [
+    {
+      "eval_id": "devops_domain_skills",
+      "conversation": [
+        {
+          "invocation_id": "e-sa-020",
+          "user_content": {
+            "parts": [
+              {
+                "text": "Show me all skills in the DevOps domain from the graph."
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "I queried the skill knowledge graph for all skills in the DevOps domain. Here are the results from the graph."
+              }
+            ],
+            "role": "model"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "name": "query_skill_graph",
+                "args": {
+                  "cypher_query": "MATCH (s:Skill) WHERE s.domain = $domain RETURN coalesce(s.name, s.id) AS name, s.description AS description",
+                  "parameters": "{\"domain\": \"DevOps\"}"
+                }
+              }
+            ],
+            "intermediate_responses": []
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "skill_advisor",
+        "user_id": "eval_user",
+        "state": {}
+      }
+    }
+  ]
+}

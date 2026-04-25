@@ -1,0 +1,66 @@
+{
+  "eval_set_id": "playground_switch_skill",
+  "name": "Playground - Multi-Turn Skill Switch",
+  "description": "Validates that the Playground agent correctly transitions when the active skill in session state changes between conversation turns.",
+  "eval_cases": [
+    {
+      "eval_id": "switch_from_review_to_deploy",
+      "conversation": [
+        {
+          "invocation_id": "e-pg-020",
+          "user_content": {
+            "parts": [
+              {
+                "text": "Hello, what skill are you currently embodying?"
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "I am currently embodying the code-review skill. I can review code changes for quality, security, and adherence to team coding standards. How can I help?"
+              }
+            ],
+            "role": "model"
+          },
+          "intermediate_data": {
+            "tool_uses": [],
+            "intermediate_responses": []
+          }
+        },
+        {
+          "invocation_id": "e-pg-021",
+          "user_content": {
+            "parts": [
+              {
+                "text": "Now what skill are you?"
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "I have switched to the deploy-to-k8s skill. I can now help you with Kubernetes deployment workflows, including creating manifests, applying configurations, and troubleshooting deployments."
+              }
+            ],
+            "role": "model"
+          },
+          "intermediate_data": {
+            "tool_uses": [],
+            "intermediate_responses": []
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "playground",
+        "user_id": "eval_user",
+        "state": {
+          "active_skill_spec": "---\nname: deploy-to-k8s\ndescription: Guides Kubernetes deployment workflows including manifest creation and troubleshooting.\n---\n\n# Deploy to K8s Instructions\n\n1. Analyze the application requirements\n2. Generate appropriate Kubernetes manifests\n3. Guide the user through kubectl apply\n4. Help troubleshoot deployment issues",
+          "skill_catalog": "[{\"name\": \"code-review\"}, {\"name\": \"deploy-to-k8s\"}]"
+        }
+      }
+    }
+  ]
+}

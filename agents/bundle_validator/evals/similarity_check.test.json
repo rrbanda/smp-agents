@@ -1,0 +1,66 @@
+{
+  "eval_set_id": "bundle_validator_similarity_check",
+  "name": "Bundle Validator - Similarity & Redundancy Check",
+  "description": "Validates that the Bundle Validator uses get_skill_similarity and get_complementary_skills to detect redundancy and suggest improvements.",
+  "eval_cases": [
+    {
+      "eval_id": "check_similar_skills_in_bundle",
+      "conversation": [
+        {
+          "invocation_id": "e-bv-020",
+          "user_content": {
+            "parts": [
+              {
+                "text": "Check if code-review and api-security-review are redundant in my bundle."
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "I checked the similarity between code-review and api-security-review. They have distinct purposes — code-review focuses on general code quality while api-security-review specializes in API security. They are not redundant and actually complement each other well for a security-conscious development workflow."
+              }
+            ],
+            "role": "model"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "name": "find_skill",
+                "args": {
+                  "identifier": "code-review"
+                }
+              },
+              {
+                "name": "find_skill",
+                "args": {
+                  "identifier": "api-security-review"
+                }
+              },
+              {
+                "name": "get_skill_similarity",
+                "args": {
+                  "identifier_a": "code-review",
+                  "identifier_b": "api-security-review"
+                }
+              },
+              {
+                "name": "get_complementary_skills",
+                "args": {
+                  "identifier": "code-review"
+                }
+              }
+            ],
+            "intermediate_responses": []
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "bundle_validator",
+        "user_id": "eval_user",
+        "state": {}
+      }
+    }
+  ]
+}

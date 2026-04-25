@@ -29,7 +29,7 @@
               {
                 "name": "validate_skill_yaml",
                 "args": {
-                  "skill_md_content": "---\nname: dockerfile-review\ndescription: Reviews Dockerfiles for best practices, security vulnerabilities, and optimization opportunities.\n---\n\n# Dockerfile Review Instructions\n..."
+                  "skill_content": "---\nname: dockerfile-review\ndescription: Reviews Dockerfiles for best practices, security vulnerabilities, and optimization opportunities.\n---\n\n# Dockerfile Review Instructions\n..."
                 }
               }
             ],
