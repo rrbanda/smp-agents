@@ -15,6 +15,9 @@ neo4j:
   password: "${NEO4J_PASSWORD}"
   database: "neo4j"
 
+catalog:
+  base_url: "${SKILL_CATALOG_URL:-https://skillctl-catalog-skill-catalog.apps.ocp.v7hjl.sandbox2288.opentlc.com}"
+
 oci:
   registry_url: "${OCI_REGISTRY_URL:-https://default-route-openshift-image-registry.apps.ocp.v7hjl.sandbox2288.opentlc.com}"
   namespace: "team1"

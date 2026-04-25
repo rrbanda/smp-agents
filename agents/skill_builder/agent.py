@@ -9,6 +9,7 @@ from google.adk import Agent
 from google.adk.skills import models
 from google.adk.tools.skill_toolset import SkillToolset
 
+from shared.catalog_tools import trigger_catalog_sync
 from shared.model_config import get_agent_config, get_agent_model
 from shared.oci_tools import publish_skill_to_oci, validate_skill_yaml
 
@@ -196,13 +197,7 @@ _skill_creator = models.Skill(
     ),
 )
 
-_skill_toolset = SkillToolset(
-    skills=[_skill_creator],
-    additional_tools=[
-        validate_skill_yaml,
-        publish_skill_to_oci,
-    ],
-)
+_skill_toolset = SkillToolset(skills=[_skill_creator])
 
 root_agent = Agent(
     model=get_agent_model(),
@@ -218,8 +213,15 @@ root_agent = Agent(
         "3. Generate a complete specification (name, description, instructions)\n"
         "4. Present for review and support multi-turn refinement\n"
         "5. On approval, validate via validate_skill_yaml then publish via "
-        "publish_skill_to_oci\n\n"
+        "publish_skill_to_oci\n"
+        "6. After publishing, call trigger_catalog_sync so the new skill "
+        "appears in the catalog immediately\n\n"
         "Always output complete, valid SKILL.md content the user can save directly."
     ),
-    tools=[_skill_toolset],
+    tools=[
+        _skill_toolset,
+        validate_skill_yaml,
+        publish_skill_to_oci,
+        trigger_catalog_sync,
+    ],
 )

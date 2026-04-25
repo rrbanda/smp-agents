@@ -1,0 +1,48 @@
+{
+  "eval_set_id": "skill_advisor_catalog_search",
+  "name": "Skill Advisor - Catalog Search",
+  "description": "Validates that the Skill Advisor uses the Skill Catalog API to search for skills by structured criteria like status and namespace.",
+  "eval_cases": [
+    {
+      "eval_id": "search_published_devops_skills",
+      "conversation": [
+        {
+          "invocation_id": "e-sa-cat-001",
+          "user_content": {
+            "parts": [
+              {
+                "text": "Find me all published DevOps skills in the catalog."
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "I searched the Skill Catalog for published DevOps skills and found several results."
+              }
+            ],
+            "role": "model"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "name": "search_skill_catalog",
+                "args": {
+                  "status": "published",
+                  "namespace": "devops"
+                }
+              }
+            ],
+            "intermediate_responses": []
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "skill_advisor",
+        "user_id": "eval_user",
+        "state": {}
+      }
+    }
+  ]
+}

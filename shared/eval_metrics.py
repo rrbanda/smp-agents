@@ -23,8 +23,14 @@ DOMAIN_TOOLS = frozenset(
         "get_skill_alternatives",
         "explore_skill_neighborhood",
         "get_skill_similarity",
+        "get_graph_context",
         "validate_skill_yaml",
         "publish_skill_to_oci",
+        "search_skill_catalog",
+        "get_skill_detail",
+        "get_skill_versions",
+        "get_skill_content",
+        "trigger_catalog_sync",
     }
 )
 

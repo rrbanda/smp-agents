@@ -1,7 +1,7 @@
 {
   "eval_set_id": "playground_no_skill_selected",
   "name": "Playground - No Skill Selected",
-  "description": "Validates that the Playground agent instructs the user to select a skill when no active skill is in session state.",
+  "description": "Validates that the Playground agent helps the user browse the catalog when no active skill is in session state.",
   "eval_cases": [
     {
       "eval_id": "hello_no_skill",
@@ -19,7 +19,7 @@
           "final_response": {
             "parts": [
               {
-                "text": "Hello! I'm the Skills Playground agent. It looks like no active skill is currently selected in your session. Please select a skill from the marketplace to get started, and I'll embody that skill to help you test it interactively."
+                "text": "Hello! I'm the Skills Playground agent. No active skill is currently selected. I can help you browse the catalog to find one. What kind of skill are you looking for?"
               }
             ],
             "role": "model"

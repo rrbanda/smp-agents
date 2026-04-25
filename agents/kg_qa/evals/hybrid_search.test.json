@@ -1,0 +1,135 @@
+{
+  "eval_set_id": "kg_qa_hybrid_search",
+  "name": "KG Q&A - Hybrid Search (Semantic + Graph)",
+  "description": "Validates that the KG Q&A agent uses semantic vector search and then enriches with graph context for meaning-based queries.",
+  "eval_cases": [
+    {
+      "eval_id": "semantic_then_graph",
+      "conversation": [
+        {
+          "invocation_id": "e-kq-hybrid-001",
+          "user_content": {
+            "parts": [
+              {
+                "text": "Find skills related to container security and show me how they connect in the graph."
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "Based on semantic search, the top skills related to container security include container-scanning and k8s-pod-security. In the knowledge graph, container-scanning DEPENDS_ON vulnerability-database and COMPLEMENTS k8s-pod-security."
+              }
+            ],
+            "role": "model"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "name": "semantic_search_skills",
+                "args": {
+                  "query": "container security",
+                  "top_k": 10
+                }
+              },
+              {
+                "name": "explore_skill_neighborhood",
+                "args": {
+                  "identifier": "container-scanning"
+                }
+              }
+            ],
+            "intermediate_responses": []
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "kg_qa",
+        "user_id": "eval_user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "similarity_comparison",
+      "conversation": [
+        {
+          "invocation_id": "e-kq-hybrid-002",
+          "user_content": {
+            "parts": [
+              {
+                "text": "How similar are code-review and docs-code-reviewer? Are they alternatives?"
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "The similarity score between code-review and docs-code-reviewer is 0.87, indicating high similarity. They are connected via a SIMILAR_TO edge in the graph."
+              }
+            ],
+            "role": "model"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "name": "get_skill_similarity",
+                "args": {
+                  "identifier_a": "code-review",
+                  "identifier_b": "docs-code-reviewer"
+                }
+              }
+            ],
+            "intermediate_responses": []
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "kg_qa",
+        "user_id": "eval_user",
+        "state": {}
+      }
+    },
+    {
+      "eval_id": "graph_context_summary",
+      "conversation": [
+        {
+          "invocation_id": "e-kq-hybrid-003",
+          "user_content": {
+            "parts": [
+              {
+                "text": "Give me a complete overview of the deploy-to-k8s skill and everything connected to it."
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "The deploy-to-k8s skill is in the DevOps domain. It has dependencies on container-build and helm-charts, complements ci-pipeline, and is tagged with kubernetes, deployment, and devops."
+              }
+            ],
+            "role": "model"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "name": "get_graph_context",
+                "args": {
+                  "identifier": "deploy-to-k8s"
+                }
+              }
+            ],
+            "intermediate_responses": []
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "kg_qa",
+        "user_id": "eval_user",
+        "state": {}
+      }
+    }
+  ]
+}

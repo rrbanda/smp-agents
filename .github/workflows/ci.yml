@@ -78,6 +78,7 @@ jobs:
       LLM_MODEL_ID: ${{ secrets.LLM_MODEL_ID }}
       EMBEDDING_API_BASE: ${{ secrets.EMBEDDING_API_BASE }}
       LLAMASTACK_API_KEY: ${{ secrets.LLAMASTACK_API_KEY }}
+      SKILL_CATALOG_URL: ${{ secrets.SKILL_CATALOG_URL }}
     steps:
       - name: Check required secrets
         run: |

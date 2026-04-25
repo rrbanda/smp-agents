@@ -1,0 +1,55 @@
+{
+  "eval_set_id": "bundle_validator_lifecycle_check",
+  "name": "Bundle Validator - Lifecycle Status Check",
+  "description": "Validates that the Bundle Validator uses catalog tools to check skill lifecycle status and versions when validating a bundle.",
+  "eval_cases": [
+    {
+      "eval_id": "check_draft_skill_in_bundle",
+      "conversation": [
+        {
+          "invocation_id": "e-bv-cat-001",
+          "user_content": {
+            "parts": [
+              {
+                "text": "Check the lifecycle status and version history for the document-reviewer skill in the business namespace."
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "I checked the document-reviewer skill from the catalog. Here's the lifecycle and version information."
+              }
+            ],
+            "role": "model"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "name": "get_skill_detail",
+                "args": {
+                  "namespace": "business",
+                  "name": "document-reviewer"
+                }
+              },
+              {
+                "name": "get_skill_versions",
+                "args": {
+                  "namespace": "business",
+                  "name": "document-reviewer"
+                }
+              }
+            ],
+            "intermediate_responses": []
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "bundle_validator",
+        "user_id": "eval_user",
+        "state": {}
+      }
+    }
+  ]
+}

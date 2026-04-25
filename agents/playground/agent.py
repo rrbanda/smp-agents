@@ -12,6 +12,7 @@ from google.adk import Agent
 from google.adk.skills import load_skill_from_dir
 from google.adk.tools.skill_toolset import SkillToolset
 
+from shared.catalog_tools import get_skill_content, search_skill_catalog
 from shared.model_config import get_agent_config, get_agent_model
 
 _cfg = get_agent_config("playground")
@@ -29,34 +30,41 @@ root_agent = Agent(
     instruction=(
         "You are a Skills Playground agent for testing skills interactively.\n\n"
         "## How It Works\n"
-        "The Backstage backend injects skill specifications into your session "
-        "state. You test those skills by embodying them.\n\n"
-        "## Session State Keys\n"
-        f"- `{_state_keys['active_skill_spec']}`: The full SKILL.md content of "
-        "the skill being tested (Pattern 3: external skill from the marketplace)\n"
-        f"- `{_state_keys['skill_catalog']}`: Summary of available skills in "
-        "the marketplace catalog\n\n"
+        "You can load skills from the Skill Catalog API or from session state "
+        "injected by the Backstage UI.\n\n"
+        "## Loading Skills\n"
+        "- Use search_skill_catalog to browse available skills by name, "
+        "namespace, tags, or status\n"
+        "- Use get_skill_content to fetch the full SKILL.md for any skill "
+        "by namespace, name, and version\n"
+        "- Session state can also provide skills:\n"
+        f"  - `{_state_keys['active_skill_spec']}`: SKILL.md content injected "
+        "by the Backstage UI\n"
+        f"  - `{_state_keys['skill_catalog']}`: Summary of available skills\n\n"
         "## Workflow\n"
         "1. Load the playground-runtime skill for your testing methodology\n"
-        "2. Read the active skill spec from session state key "
-        f"'{_state_keys['active_skill_spec']}'\n"
-        "3. Parse the spec's frontmatter (name, description) and instructions\n"
-        "4. Respond to user messages AS IF you are that skill -- follow its "
+        "2. If the user names a skill, use search_skill_catalog to find it, "
+        "then get_skill_content to fetch its SKILL.md\n"
+        "3. If session state has an active spec, use that instead\n"
+        "4. Parse the spec's frontmatter (name, description) and instructions\n"
+        "5. Respond to user messages AS IF you are that skill -- follow its "
         "instructions exactly\n"
-        "5. Tag every response with the active skill name:\n"
+        "6. Tag every response with the active skill name:\n"
         '   {"skill_name": "...", "response": "..."}\n'
-        "6. When the session state updates with a new spec (user switched "
-        "skills in the UI), seamlessly transition to the new skill\n"
-        "7. If the user asks you to evaluate the skill's quality, load the "
+        "7. When the user asks to switch skills, fetch the new spec via "
+        "get_skill_content\n"
+        "8. If the user asks you to evaluate the skill's quality, load the "
         "playground-runtime skill's testing-guide reference for evaluation criteria\n\n"
         "## Boundaries\n"
         "- You cannot modify the skill specification; you can only test it\n"
         "- If the skill references tools you don't have, explain what would "
         "happen if you did\n"
-        "- If no active skill is set in session state, tell the user to select "
-        "a skill from the marketplace"
+        "- If no active skill is set, use search_skill_catalog to help the "
+        "user browse and select one"
     ),
     tools=[
         _skill_toolset,
+        search_skill_catalog,
+        get_skill_content,
     ],
 )

@@ -11,12 +11,14 @@ from google.adk import Agent
 from google.adk.skills import load_skill_from_dir, models
 from google.adk.tools.skill_toolset import SkillToolset
 
+from shared.catalog_tools import search_skill_catalog
 from shared.model_config import get_agent_config, get_agent_model
 from shared.neo4j_tools import (
     explore_skill_neighborhood,
     get_complementary_skills,
     get_skill_alternatives,
     get_skill_dependencies,
+    get_skill_similarity,
     query_skill_graph,
 )
 from shared.semantic_search_tools import semantic_search_skills
@@ -60,17 +62,7 @@ _output_format_skill = models.Skill(
 # Pattern 2: File-based skill -- has L3 reference for scoring strategy
 _advisor_skill = load_skill_from_dir(_skills_dir / "skill-advisor")
 
-_skill_toolset = SkillToolset(
-    skills=[_output_format_skill, _advisor_skill],
-    additional_tools=[
-        semantic_search_skills,
-        query_skill_graph,
-        get_skill_dependencies,
-        get_complementary_skills,
-        get_skill_alternatives,
-        explore_skill_neighborhood,
-    ],
-)
+_skill_toolset = SkillToolset(skills=[_output_format_skill, _advisor_skill])
 
 root_agent = Agent(
     model=get_agent_model(),
@@ -81,14 +73,28 @@ root_agent = Agent(
         "Your job is to recommend complementary skills based on what the user "
         "describes and what is already in their bundle cart.\n\n"
         "1. Load the skill-advisor skill for your recommendation methodology\n"
-        "2. Use semantic_search_skills to find relevant skills by meaning\n"
-        "3. Use get_complementary_skills to find workflow partners (COMPLEMENTS)\n"
-        "4. Use get_skill_dependencies to check dependency chains (DEPENDS_ON)\n"
-        "5. Use get_skill_alternatives to find interchangeable options\n"
-        "6. Use explore_skill_neighborhood for broader graph context\n"
-        "7. Filter out skills already in the cart (from session state '_cart_skills')\n"
-        "8. Load the advisor-output-format skill for the response schema\n"
-        "9. Return ranked recommendations in the specified JSON format"
+        "2. Use search_skill_catalog for structured filtering by status, tags, "
+        "namespace, or compatibility\n"
+        "3. Use semantic_search_skills to find relevant skills by meaning\n"
+        "4. Use get_complementary_skills to find workflow partners (COMPLEMENTS)\n"
+        "5. Use get_skill_dependencies to check dependency chains (DEPENDS_ON)\n"
+        "6. Use get_skill_alternatives to find interchangeable options\n"
+        "7. Use get_skill_similarity to check pairwise similarity and detect "
+        "redundancy between candidates\n"
+        "8. Use explore_skill_neighborhood for broader graph context\n"
+        "9. Filter out skills already in the cart (from session state '_cart_skills')\n"
+        "10. Load the advisor-output-format skill for the response schema\n"
+        "11. Return ranked recommendations in the specified JSON format"
     ),
-    tools=[_skill_toolset],
+    tools=[
+        _skill_toolset,
+        search_skill_catalog,
+        semantic_search_skills,
+        query_skill_graph,
+        get_skill_dependencies,
+        get_complementary_skills,
+        get_skill_alternatives,
+        get_skill_similarity,
+        explore_skill_neighborhood,
+    ],
 )

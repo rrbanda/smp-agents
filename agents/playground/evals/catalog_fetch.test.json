@@ -1,0 +1,56 @@
+{
+  "eval_set_id": "playground_catalog_fetch",
+  "name": "Playground - Fetch Skill from Catalog",
+  "description": "Validates that the Playground agent uses the catalog to search for and fetch a skill's SKILL.md content when the user names a specific skill.",
+  "eval_cases": [
+    {
+      "eval_id": "fetch_and_embody_skill",
+      "conversation": [
+        {
+          "invocation_id": "e-pg-cat-001",
+          "user_content": {
+            "parts": [
+              {
+                "text": "I want to test the document-reviewer skill from the business namespace."
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "I've loaded the document-reviewer skill. I'm now ready to review documents following its instructions. Please share the document you'd like me to review."
+              }
+            ],
+            "role": "model"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "name": "search_skill_catalog",
+                "args": {
+                  "query": "document-reviewer",
+                  "namespace": "business"
+                }
+              },
+              {
+                "name": "get_skill_content",
+                "args": {
+                  "namespace": "business",
+                  "name": "document-reviewer",
+                  "version": "1.0.0"
+                }
+              }
+            ],
+            "intermediate_responses": []
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "playground",
+        "user_id": "eval_user",
+        "state": {}
+      }
+    }
+  ]
+}

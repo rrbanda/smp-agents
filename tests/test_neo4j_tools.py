@@ -10,12 +10,14 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from shared.neo4j_tools import (
+    _cache,
     _check_cypher_safety,
     _neo4j_http_query,
     _skill_match_clause,
     explore_skill_neighborhood,
     find_skill,
     get_complementary_skills,
+    get_graph_context,
     get_skill_alternatives,
     get_skill_dependencies,
     get_skill_similarity,
@@ -26,8 +28,39 @@ from shared.neo4j_tools import (
 
 
 class TestCypherSafety:
-    def test_allows_read_queries(self):
+    # --- Allowed read-only queries ---
+
+    def test_allows_match(self):
         _check_cypher_safety("MATCH (s:Skill) RETURN s LIMIT 10")
+
+    def test_allows_optional_match(self):
+        _check_cypher_safety("OPTIONAL MATCH (s:Skill)-[r]->(t) RETURN s, r, t")
+
+    def test_allows_return(self):
+        _check_cypher_safety("RETURN 1 AS ping")
+
+    def test_allows_with(self):
+        _check_cypher_safety("WITH 'test' AS val RETURN val")
+
+    def test_allows_unwind(self):
+        _check_cypher_safety("UNWIND [1,2,3] AS x RETURN x")
+
+    def test_allows_call_db_vector(self):
+        _check_cypher_safety(
+            "CALL db.index.vector.queryNodes('skill_embedding_idx', 10, [0.1]) YIELD node, score RETURN node, score"
+        )
+
+    # --- Blocked by allowlist (bad prefix) ---
+
+    def test_blocks_create_node_prefix(self):
+        with pytest.raises(ValueError, match="read-only clause"):
+            _check_cypher_safety("CREATE (n:Skill {name: 'injected'})")
+
+    def test_blocks_merge_prefix(self):
+        with pytest.raises(ValueError, match="read-only clause"):
+            _check_cypher_safety("MERGE (n:Skill {name: 'injected'})")
+
+    # --- Blocked by blocklist (write keywords inside valid prefix) ---
 
     def test_blocks_delete(self):
         with pytest.raises(ValueError, match="DELETE"):
@@ -38,7 +71,7 @@ class TestCypherSafety:
             _check_cypher_safety("MATCH (n) DETACH DELETE n")
 
     def test_blocks_drop(self):
-        with pytest.raises(ValueError, match="DROP"):
+        with pytest.raises(ValueError, match="read-only clause"):
             _check_cypher_safety("DROP INDEX foo")
 
     def test_blocks_remove(self):
@@ -46,7 +79,7 @@ class TestCypherSafety:
             _check_cypher_safety("MATCH (n) REMOVE n.prop")
 
     def test_blocks_load_csv(self):
-        with pytest.raises(ValueError, match="LOAD CSV"):
+        with pytest.raises(ValueError, match="read-only clause"):
             _check_cypher_safety("LOAD CSV FROM 'file:///data.csv' AS row")
 
     def test_case_insensitive(self):
@@ -54,12 +87,27 @@ class TestCypherSafety:
             _check_cypher_safety("match (n) delete n")
 
     def test_blocks_create_index(self):
-        with pytest.raises(ValueError, match="CREATE INDEX"):
+        with pytest.raises(ValueError, match="CREATE"):
             _check_cypher_safety("CREATE INDEX ON :Skill(name)")
 
     def test_blocks_call_dbms(self):
-        with pytest.raises(ValueError, match="CALL DBMS"):
+        with pytest.raises(ValueError, match="read-only clause"):
             _check_cypher_safety("CALL dbms.security.createUser('bad','pw',false)")
+
+    def test_blocks_set_in_match(self):
+        with pytest.raises(ValueError, match="SET"):
+            _check_cypher_safety("MATCH (n:Skill) SET n.hacked = true")
+
+    def test_blocks_create_in_match(self):
+        with pytest.raises(ValueError, match="CREATE"):
+            _check_cypher_safety("MATCH (a:Skill), (b:Skill) CREATE (a)-[:HACKED]->(b)")
+
+    def test_blocks_merge_in_match(self):
+        with pytest.raises(ValueError, match="MERGE"):
+            _check_cypher_safety("MATCH (a:Skill) MERGE (a)-[:HACKED]->(b:Skill)")
+
+    def test_allows_whitespace_prefix(self):
+        _check_cypher_safety("  MATCH (s:Skill) RETURN s")
 
 
 # ---- Match clause ---------------------------------------------------------
@@ -105,6 +153,10 @@ class TestQuerySkillGraph:
 
 
 class TestNeo4jHttpQueryRetry:
+    @pytest.fixture(autouse=True)
+    def _clear_cache(self):
+        _cache.clear()
+
     def _make_success_response(self):
         resp = MagicMock()
         resp.read.return_value = json.dumps(
@@ -263,6 +315,18 @@ class TestExploreSkillNeighborhood:
         explore_skill_neighborhood("my-skill")
         params = json.loads(mock_qsg.call_args[0][1])
         assert params["identifier"] == "my-skill"
+
+
+class TestGetGraphContext:
+    @patch("shared.neo4j_tools.query_skill_graph")
+    def test_calls_with_identifier(self, mock_qsg):
+        mock_qsg.return_value = "[]"
+        get_graph_context("my-skill")
+        params = json.loads(mock_qsg.call_args[0][1])
+        assert params["identifier"] == "my-skill"
+        cypher = mock_qsg.call_args[0][0]
+        assert "relationships" in cypher
+        assert "OPTIONAL MATCH" in cypher
 
 
 class TestGetSkillSimilarity:

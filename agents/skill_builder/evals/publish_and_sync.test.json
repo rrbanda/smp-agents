@@ -1,0 +1,60 @@
+{
+  "eval_set_id": "skill_builder_publish_and_sync",
+  "name": "Skill Builder - Publish and Trigger Catalog Sync",
+  "description": "Validates that the Skill Builder triggers a catalog re-sync after publishing a skill to the OCI registry.",
+  "eval_cases": [
+    {
+      "eval_id": "publish_then_sync",
+      "conversation": [
+        {
+          "invocation_id": "e-sb-cat-001",
+          "user_content": {
+            "parts": [
+              {
+                "text": "Create a skill called api-rate-limiter that reviews API rate limiting configurations. Validate, publish it as 1.0.0, and make sure it shows up in the catalog."
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "I've created the api-rate-limiter skill, validated it, published to the OCI registry as 1.0.0, and triggered a catalog re-sync so it will appear in search results immediately."
+              }
+            ],
+            "role": "model"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "name": "validate_skill_yaml",
+                "args": {
+                  "skill_content": "---\nname: api-rate-limiter\ndescription: Reviews API rate limiting configurations for correctness and best practices.\n---\n\n# API Rate Limiter Review\n..."
+                }
+              },
+              {
+                "name": "publish_skill_to_oci",
+                "args": {
+                  "skill_name": "api-rate-limiter",
+                  "version": "1.0.0",
+                  "skill_content": "---\nname: api-rate-limiter\ndescription: Reviews API rate limiting configurations for correctness and best practices.\n---\n\n# API Rate Limiter Review\n...",
+                  "author": "smp-agent"
+                }
+              },
+              {
+                "name": "trigger_catalog_sync",
+                "args": {}
+              }
+            ],
+            "intermediate_responses": []
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "skill_builder",
+        "user_id": "eval_user",
+        "state": {}
+      }
+    }
+  ]
+}

@@ -84,6 +84,11 @@ def get_neo4j_config() -> dict[str, Any]:
     return load_config()["neo4j"]  # type: ignore[no-any-return]
 
 
+def get_catalog_config() -> dict[str, Any]:
+    """Returns Skill Catalog API parameters from config."""
+    return load_config()["catalog"]  # type: ignore[no-any-return]
+
+
 def get_oci_config() -> dict[str, Any]:
     """Returns OCI registry parameters from config."""
     return load_config()["oci"]  # type: ignore[no-any-return]

@@ -15,8 +15,10 @@ All query helpers accept a generic identifier and match both keys.
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import logging
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -28,12 +30,62 @@ logger = logging.getLogger(__name__)
 
 _HTTP_PORT = 7474
 _MAX_RETRIES = 3
+_CACHE_TTL = 300  # seconds
+_CACHE_MAX_SIZE = 256
+
+_cache: dict[str, tuple[float, list[dict]]] = {}
+_cache_lock = threading.Lock()
+
+
+def _cache_key(cypher: str, params: dict[str, Any] | None) -> str | None:
+    """Build a cache key from cypher + params, or None if uncacheable."""
+    serialized = json.dumps(params or {}, sort_keys=True, default=str)
+    if len(serialized) > 4096:
+        return None
+    raw = f"{cypher}\x00{serialized}"
+    return hashlib.sha256(raw.encode()).hexdigest()
+
+
+def _cache_get(key: str) -> list[dict] | None:
+    with _cache_lock:
+        entry = _cache.get(key)
+        if entry is None:
+            return None
+        ts, data = entry
+        if time.monotonic() - ts > _CACHE_TTL:
+            del _cache[key]
+            return None
+        return data
+
+
+def _cache_put(key: str, data: list[dict]) -> None:
+    with _cache_lock:
+        if len(_cache) >= _CACHE_MAX_SIZE:
+            oldest_key = min(_cache, key=lambda k: _cache[k][0])
+            del _cache[oldest_key]
+        _cache[key] = (time.monotonic(), data)
+
+
+_CYPHER_ALLOWED_PREFIXES = frozenset(
+    [
+        "MATCH",
+        "OPTIONAL",
+        "RETURN",
+        "WITH",
+        "UNWIND",
+        "CALL DB.",
+        "CALL DBMS.CLUSTER",  # read-only cluster info
+    ]
+)
 _CYPHER_BLOCKED_KEYWORDS = frozenset(
     [
         "DELETE",
         "DETACH",
         "REMOVE",
         "DROP",
+        "CREATE",
+        "MERGE",
+        "SET ",
         "CREATE INDEX",
         "CREATE CONSTRAINT",
         "CALL DBMS",
@@ -49,6 +101,12 @@ def _neo4j_http_query(
     retries: int = _MAX_RETRIES,
 ) -> list[dict]:
     """Execute a Cypher query via the Neo4j HTTP Transactional API."""
+    ck = _cache_key(cypher, params)
+    if ck is not None:
+        cached = _cache_get(ck)
+        if cached is not None:
+            return cached
+
     cfg = get_neo4j_config()
     db = cfg.get("database", "neo4j")
     http_url = cfg.get("http_url", "")
@@ -76,7 +134,10 @@ def _neo4j_http_query(
             results = data.get("results", [{}])[0]
             columns = results.get("columns", [])
             rows = results.get("data", [])
-            return [dict(zip(columns, row["row"], strict=False)) for row in rows]
+            records = [dict(zip(columns, row["row"], strict=False)) for row in rows]
+            if ck is not None:
+                _cache_put(ck, records)
+            return records
         except urllib.error.HTTPError as e:
             resp_body = e.read().decode()[:500] if e.fp else ""
             last_err = RuntimeError(f"Neo4j HTTP {e.code}: {resp_body}")
@@ -98,8 +159,23 @@ def _skill_match_clause(var: str = "s", param: str = "identifier") -> str:
 
 
 def _check_cypher_safety(cypher: str) -> None:
-    """Reject Cypher containing destructive operations."""
-    upper = cypher.upper()
+    """Reject Cypher containing write/destructive operations.
+
+    Uses a two-layer defense: first checks that the query starts with a
+    known read-only prefix (allowlist), then scans for blocked keywords
+    anywhere in the query body (blocklist).
+    """
+    stripped = cypher.strip()
+    upper = stripped.upper()
+
+    prefix_ok = any(upper.startswith(prefix) for prefix in _CYPHER_ALLOWED_PREFIXES)
+    if not prefix_ok:
+        raise ValueError(
+            f"Cypher query must start with a read-only clause "
+            f"(MATCH, OPTIONAL MATCH, RETURN, WITH, UNWIND, CALL db.*). "
+            f"Got: {stripped[:60]!r}"
+        )
+
     for keyword in _CYPHER_BLOCKED_KEYWORDS:
         if keyword in upper:
             raise ValueError(f"Blocked Cypher operation: {keyword}")
@@ -222,6 +298,38 @@ def explore_skill_neighborhood(identifier: str) -> str:
         "CASE WHEN startNode(r) = s THEN 'outgoing' ELSE 'incoming' END AS direction, "
         "r.confidence AS confidence "
         "ORDER BY type(r), coalesce(neighbor.name, neighbor.id)"
+    )
+    return query_skill_graph(cypher, json.dumps({"identifier": identifier}))
+
+
+def get_graph_context(identifier: str) -> str:
+    """Get a compact summary of a skill's full graph neighborhood in one call.
+
+    Returns the skill's properties plus all connected nodes grouped by
+    relationship type (tags, domain, dependencies, complements, alternatives,
+    similar skills). Useful for giving the LLM rich context without needing
+    multiple sequential tool calls.
+
+    Args:
+        identifier: The skill name or id.
+
+    Returns:
+        JSON-encoded summary with skill properties and grouped relationships.
+    """
+    cypher = (
+        f"MATCH (s:Skill) WHERE {_skill_match_clause()} "
+        "OPTIONAL MATCH (s)-[r]-(neighbor) "
+        "WITH s, type(r) AS rel_type, "
+        "collect(DISTINCT {name: coalesce(neighbor.name, neighbor.id), "
+        "label: labels(neighbor)[0], "
+        "direction: CASE WHEN startNode(r) = s THEN 'out' ELSE 'in' END, "
+        "confidence: r.confidence, score: r.score}) AS neighbors "
+        "WITH s, collect({type: rel_type, nodes: neighbors}) AS relationships "
+        "RETURN coalesce(s.name, s.id) AS identifier, "
+        "s.description AS description, s.domain AS domain, "
+        "s.plugin AS plugin, s.category AS category, "
+        "s.tags AS tags, s.version AS version, "
+        "relationships"
     )
     return query_skill_graph(cypher, json.dumps({"identifier": identifier}))
 
