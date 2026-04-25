@@ -1,12 +1,12 @@
 model:
   agent:
-    id: "openai/gemini/models/gemini-2.5-flash"
-    api_base: "${LLM_API_BASE:-https://llamastack-llamastack.apps.ocp.v7hjl.sandbox2288.opentlc.com/v1}"
+    id: "openai/gemma-4-31b-it"
+    api_base: "${LLM_API_BASE:-http://gemma-4-31b-it-predictor.gemma4-31b.svc.cluster.local:8080/v1}"
     api_key: "${LLAMASTACK_API_KEY}"
   embedding:
     id: "vllm-embedding/nomic-embed-text-v1-5"
     dimension: 768
-    api_base: "${LLM_API_BASE:-https://llamastack-llamastack.apps.ocp.v7hjl.sandbox2288.opentlc.com/v1}"
+    api_base: "${EMBEDDING_API_BASE:-https://llamastack-llamastack.apps.ocp.v7hjl.sandbox2288.opentlc.com/v1}"
 
 neo4j:
   uri: "${NEO4J_URI:-bolt://neo4j.skills-marketplace.svc.cluster.local:7687}"
