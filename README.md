@@ -98,11 +98,15 @@ sequenceDiagram
 
 The agents use four skill patterns with **progressive disclosure** to minimize context window usage while keeping deep knowledge accessible:
 
+![Skill Patterns — From Inline to Meta](docs/images/skill-patterns.png)
+
 ```mermaid
 graph LR
     L1["L1: list_skills<br/>Names + descriptions only"] --> L2["L2: load_skill<br/>Full SKILL.md instructions"]
     L2 --> L3["L3: load_skill_resource<br/>Deep-dive references"]
 ```
+
+![Progressive Disclosure — L1 / L2 / L3](docs/images/progressive-disclosure.png)
 
 ### Pattern 1: Inline Skill
 
@@ -173,6 +177,12 @@ _skill_creator = models.Skill(
 ```
 
 **Used by:** Skill Builder (generates and publishes new skills)
+
+### SkillToolset: How Skills Become Tools
+
+At runtime, three auto-registered tools enable progressive disclosure without any custom plumbing:
+
+![SkillToolset Flow — How Skills Become Tools](docs/images/skilltoolset-flow.png)
 
 ## Agentic Graph RAG
 
