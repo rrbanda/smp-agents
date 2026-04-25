@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import gzip
 import io
-import json
+import logging
 import os
 import sys
 import tarfile
@@ -23,15 +23,22 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from shared.model_config import get_neo4j_config, get_oci_config
+logging.basicConfig(
+    level=getattr(logging, os.environ.get("LOG_LEVEL", "INFO").upper(), logging.INFO),
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+)
+logger = logging.getLogger(__name__)
 
 from neo4j import GraphDatabase
+
+from shared.model_config import get_neo4j_config, get_oci_config
 
 
 def _get_oc_token() -> str:
     token = os.environ.get("OC_TOKEN")
     if not token:
         import subprocess
+
         result = subprocess.run(["oc", "whoami", "-t"], capture_output=True, text=True)
         token = result.stdout.strip()
     return token
@@ -40,20 +47,28 @@ def _get_oc_token() -> str:
 def _list_imagestreams(oc_token: str, namespace: str) -> list[str]:
     """List all imagestream names in the given namespace via oc."""
     import subprocess
+
     result = subprocess.run(
         ["oc", "get", "imagestream", "-n", namespace, "-o", "jsonpath={.items[*].metadata.name}"],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     names = result.stdout.strip().split()
     return [n for n in names if n.startswith("skill-")]
 
 
-def _pull_skill_artifact(registry_url: str, namespace: str, skill_name: str, tag: str, oc_token: str, max_retries: int = 3) -> dict | None:
+def _pull_skill_artifact(
+    registry_url: str, namespace: str, skill_name: str, tag: str, oc_token: str, max_retries: int = 3
+) -> dict | None:
     """Pull and extract SKILL.md + skill.yaml from an OCI skill artifact."""
     import time as _time
 
     session = requests.Session()
-    session.verify = False
+    ca_bundle = os.environ.get("REQUESTS_CA_BUNDLE", "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt")
+    if os.path.isfile(ca_bundle):
+        session.verify = ca_bundle
+    else:
+        session.verify = True
     headers = {"Authorization": f"Bearer {oc_token}"}
 
     for attempt in range(max_retries):
@@ -61,7 +76,13 @@ def _pull_skill_artifact(registry_url: str, namespace: str, skill_name: str, tag
             manifest_url = f"{registry_url}/v2/{namespace}/{skill_name}/manifests/{tag}"
             resp = session.get(
                 manifest_url,
-                headers={**headers, "Accept": "application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json"},
+                headers={
+                    **headers,
+                    "Accept": (
+                        "application/vnd.oci.image.manifest.v1+json,"
+                        " application/vnd.docker.distribution.manifest.v2+json"
+                    ),
+                },
                 timeout=15,
             )
             if resp.status_code != 200:
@@ -90,9 +111,9 @@ def _pull_skill_artifact(registry_url: str, namespace: str, skill_name: str, tag
                         if f:
                             result["skill_yaml"] = yaml.safe_load(f.read())
             return result if result else None
-        except (requests.ConnectionError, requests.Timeout, tarfile.TarError, gzip.BadGzipFile) as e:
+        except (requests.ConnectionError, requests.Timeout, tarfile.TarError, gzip.BadGzipFile):
             if attempt < max_retries - 1:
-                _time.sleep(2 ** attempt)
+                _time.sleep(2**attempt)
                 continue
             return None
 
@@ -179,19 +200,16 @@ def _upsert_skill(tx, skill_data: dict):
 
 
 def main():
-    import urllib3
-    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
     oci_cfg = get_oci_config()
     neo4j_cfg = get_neo4j_config()
     registry_url = oci_cfg["registry_url"]
     namespace = oci_cfg["namespace"]
 
     oc_token = _get_oc_token()
-    print(f"Registry: {registry_url}/{namespace}")
+    logger.info("Registry: %s/%s", registry_url, namespace)
 
     imagestreams = _list_imagestreams(oc_token, namespace)
-    print(f"Found {len(imagestreams)} skill imagestreams")
+    logger.info("Found %d skill imagestreams", len(imagestreams))
 
     driver = GraphDatabase.driver(
         neo4j_cfg["uri"],
@@ -203,11 +221,12 @@ def main():
 
     for i, is_name in enumerate(imagestreams, 1):
         if i % 100 == 0:
-            print(f"  [{i}/{len(imagestreams)}] synced={synced} failed={failed}")
+            logger.info("[%d/%d] synced=%d failed=%d", i, len(imagestreams), synced, failed)
 
         try:
             artifact = _pull_skill_artifact(registry_url, namespace, is_name, "1.0.0", oc_token)
-        except Exception as e:
+        except Exception:
+            logger.exception("Error pulling artifact %s", is_name)
             failed += 1
             continue
         if not artifact:
@@ -243,12 +262,12 @@ def main():
             with driver.session(database=neo4j_cfg.get("database", "neo4j")) as session:
                 session.execute_write(_upsert_skill, skill_data)
             synced += 1
-        except Exception as e:
-            print(f"  ERROR syncing {skill_name}: {e}")
+        except Exception:
+            logger.exception("Error syncing %s", skill_name)
             failed += 1
 
     driver.close()
-    print(f"\nDone. Synced: {synced}, Failed: {failed}, Total: {len(imagestreams)}")
+    logger.info("Done. Synced: %d, Failed: %d, Total: %d", synced, failed, len(imagestreams))
 
 
 if __name__ == "__main__":

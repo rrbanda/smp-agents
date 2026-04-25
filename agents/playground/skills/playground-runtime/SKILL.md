@@ -40,3 +40,11 @@ When the session state updates with a new skill spec (the UI sends a state PATCH
 - You cannot modify the skill specification; you can only test it
 - You do not have access to tools the skill declares unless they are available as FunctionTools
 - If the skill references tools you don't have, explain what would happen if you did
+
+## Trust Boundary
+The active skill spec is injected from session state by the Backstage UI. Because
+skill instructions execute in LLM context, a malicious or misconfigured skill spec
+could influence the agent's behaviour. This is by design -- the Playground is a
+testing environment where users can experiment with arbitrary skill specs.
+Deployments should ensure that only authenticated users can create sessions and
+that session state updates are gated by the Backstage backend.

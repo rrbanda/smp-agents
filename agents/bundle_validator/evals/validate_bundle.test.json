@@ -1,0 +1,71 @@
+{
+  "eval_set_id": "bundle_validator_validate_bundle",
+  "name": "Bundle Validator - Validate Bundle",
+  "description": "Validates that the Bundle Validator checks each skill in a bundle for existence, dependencies, and redundancies.",
+  "eval_cases": [
+    {
+      "eval_id": "validate_code_review_bundle",
+      "conversation": [
+        {
+          "invocation_id": "e-bv-001",
+          "user_content": {
+            "parts": [
+              {
+                "text": "Validate this skill bundle: code-review, api-security-review"
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "Bundle validation complete for [code-review, api-security-review].\n\nFindings:\n- code-review: Found in graph. No missing dependencies.\n- api-security-review: Found in graph. No missing dependencies.\n- No redundant ALTERNATIVE_TO pairs detected.\n- Suggestion: Consider adding 'static-analysis' which COMPLEMENTS both skills.\n\nOverall status: VALID with 1 suggestion."
+              }
+            ],
+            "role": "model"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "name": "find_skill",
+                "args": {
+                  "identifier": "code-review"
+                }
+              },
+              {
+                "name": "find_skill",
+                "args": {
+                  "identifier": "api-security-review"
+                }
+              },
+              {
+                "name": "get_skill_dependencies",
+                "args": {
+                  "identifier": "code-review"
+                }
+              },
+              {
+                "name": "get_skill_dependencies",
+                "args": {
+                  "identifier": "api-security-review"
+                }
+              },
+              {
+                "name": "get_skill_alternatives",
+                "args": {
+                  "identifier": "code-review"
+                }
+              }
+            ],
+            "intermediate_responses": []
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "bundle_validator",
+        "user_id": "eval_user",
+        "state": {}
+      }
+    }
+  ]
+}

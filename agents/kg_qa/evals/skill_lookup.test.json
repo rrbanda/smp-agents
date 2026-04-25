@@ -1,0 +1,53 @@
+{
+  "eval_set_id": "kg_qa_skill_lookup",
+  "name": "KG Q&A - Skill Lookup",
+  "description": "Validates that the KG Q&A agent looks up a specific skill and its neighborhood in the graph.",
+  "eval_cases": [
+    {
+      "eval_id": "lookup_code_review",
+      "conversation": [
+        {
+          "invocation_id": "e-kq-002",
+          "user_content": {
+            "parts": [
+              {
+                "text": "Tell me about the code-review skill and what it connects to in the graph."
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "The code-review skill is registered in the knowledge graph. It reviews code changes for quality, security, and adherence to team coding standards.\n\nNeighbors in the graph include related skills connected via COMPLEMENTS, DEPENDS_ON, and SIMILAR_TO relationships.\n\nHighlighted nodes: code-review"
+              }
+            ],
+            "role": "model"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "name": "find_skill",
+                "args": {
+                  "identifier": "code-review"
+                }
+              },
+              {
+                "name": "explore_skill_neighborhood",
+                "args": {
+                  "identifier": "code-review"
+                }
+              }
+            ],
+            "intermediate_responses": []
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "kg_qa",
+        "user_id": "eval_user",
+        "state": {}
+      }
+    }
+  ]
+}

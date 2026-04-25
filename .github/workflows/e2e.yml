@@ -1,0 +1,43 @@
+name: E2E Tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: "Base URL for deployed agents (e.g. https://smp-agents.apps.ocp.example.com)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  e2e-tests:
+    name: E2E Tests (deployed agents)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      E2E_BASE_URL: ${{ inputs.base_url }}
+      NEO4J_URI: ${{ secrets.NEO4J_URI }}
+      NEO4J_PASSWORD: ${{ secrets.NEO4J_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run E2E tests
+        run: pytest tests/ -m e2e -v --tb=long --junitxml=test-results/e2e.xml
+
+      - name: Upload E2E results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-test-results
+          path: test-results/e2e.xml

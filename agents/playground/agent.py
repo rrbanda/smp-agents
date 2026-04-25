@@ -12,7 +12,7 @@ from google.adk import Agent
 from google.adk.skills import load_skill_from_dir
 from google.adk.tools.skill_toolset import SkillToolset
 
-from shared.model_config import get_agent_model, get_agent_config
+from shared.model_config import get_agent_config, get_agent_model
 
 _cfg = get_agent_config("playground")
 _state_keys = _cfg["state_keys"]

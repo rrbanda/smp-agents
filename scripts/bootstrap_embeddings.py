@@ -10,7 +10,8 @@
 
 from __future__ import annotations
 
-import json
+import logging
+import os
 import sys
 import time
 from pathlib import Path
@@ -20,7 +21,13 @@ from neo4j import GraphDatabase
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from shared.model_config import get_neo4j_config, get_embedding_config
+logging.basicConfig(
+    level=getattr(logging, os.environ.get("LOG_LEVEL", "INFO").upper(), logging.INFO),
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+)
+logger = logging.getLogger(__name__)
+
+from shared.model_config import get_embedding_config, get_neo4j_config
 
 BATCH_SIZE = 32
 SIMILAR_TOP_K = 5
@@ -60,80 +67,75 @@ def main():
     )
 
     with driver.session(database=neo4j_cfg.get("database", "neo4j")) as session:
-        print("Step 1: Drop existing vector index (if any)")
+        logger.info("Step 1: Drop existing vector index (if any)")
         try:
             session.run("DROP INDEX skill_embedding_idx IF EXISTS")
-            print("  Dropped skill_embedding_idx")
+            logger.info("Dropped skill_embedding_idx")
         except Exception:
-            print("  No existing index to drop")
+            logger.info("No existing index to drop")
 
         try:
             session.run("DROP INDEX skill_embedding IF EXISTS")
-            print("  Dropped skill_embedding")
+            logger.info("Dropped skill_embedding")
         except Exception:
             pass
 
-        print(f"Step 2: Create vector index ({dimension} dimensions, COSINE)")
+        logger.info("Step 2: Create vector index (%d dimensions, COSINE)", dimension)
         session.run(
             "CREATE VECTOR INDEX skill_embedding_idx IF NOT EXISTS "
             "FOR (s:Skill) ON (s.embedding) "
             f"OPTIONS {{indexConfig: {{`vector.dimensions`: {dimension}, `vector.similarity_function`: 'cosine'}}}}"
         )
-        print("  Index created")
+        logger.info("Index created")
 
-        print("Step 3: Fetch all skills")
+        logger.info("Step 3: Fetch all skills")
         skills = _get_all_skills(session)
-        print(f"  Found {len(skills)} skills")
+        logger.info("Found %d skills", len(skills))
 
         if not skills:
-            print("No skills to embed. Run sync_oci_skills.py first.")
+            logger.warning("No skills to embed. Run sync_oci_skills.py first.")
             driver.close()
             return
 
-        print(f"Step 4: Embed in batches of {BATCH_SIZE}")
+        logger.info("Step 4: Embed in batches of %d", BATCH_SIZE)
         embedded_count = 0
         for i in range(0, len(skills), BATCH_SIZE):
             batch = skills[i : i + BATCH_SIZE]
-            texts = [
-                f"{s['identifier']}: {s['description']}" if s["description"]
-                else s["identifier"]
-                for s in batch
-            ]
+            texts = [f"{s['identifier']}: {s['description']}" if s["description"] else s["identifier"] for s in batch]
 
             try:
                 embeddings = _embed_batch(texts, embed_cfg)
-            except Exception as e:
-                print(f"  ERROR embedding batch {i}-{i+len(batch)}: {e}")
+            except Exception:
+                logger.exception("Error embedding batch %d-%d", i, i + len(batch))
                 continue
 
-            for skill, embedding in zip(batch, embeddings):
+            for skill, embedding in zip(batch, embeddings, strict=True):
                 session.run(
-                    "MATCH (s:Skill) WHERE elementId(s) = $eid "
-                    "SET s.embedding = $embedding",
+                    "MATCH (s:Skill) WHERE elementId(s) = $eid SET s.embedding = $embedding",
                     eid=skill["eid"],
                     embedding=embedding,
                 )
 
             embedded_count += len(batch)
             if (i // BATCH_SIZE + 1) % 10 == 0:
-                print(f"  [{embedded_count}/{len(skills)}] embedded")
+                logger.info("[%d/%d] embedded", embedded_count, len(skills))
 
-        print(f"  Embedded {embedded_count} skills")
+        logger.info("Embedded %d skills", embedded_count)
 
         time.sleep(2)
 
-        print(f"Step 5: Compute SIMILAR_TO edges (top-{SIMILAR_TOP_K}, threshold {SIMILAR_THRESHOLD})")
+        logger.info("Step 5: Compute SIMILAR_TO edges (top-%d, threshold %.2f)", SIMILAR_TOP_K, SIMILAR_THRESHOLD)
         skills_with_embeddings = session.run(
             "MATCH (s:Skill) WHERE s.embedding IS NOT NULL "
             "RETURN elementId(s) AS eid, coalesce(s.name, s.id) AS identifier, s.embedding AS embedding"
         )
         skills_list = [dict(r) for r in skills_with_embeddings]
-        print(f"  {len(skills_list)} skills with embeddings")
+        logger.info("%d skills with embeddings", len(skills_list))
 
         similar_count = 0
         for idx, skill in enumerate(skills_list):
             if idx % 200 == 0 and idx > 0:
-                print(f"  [{idx}/{len(skills_list)}] SIMILAR_TO edges created: {similar_count}")
+                logger.info("[%d/%d] SIMILAR_TO edges created: %d", idx, len(skills_list), similar_count)
 
             try:
                 result = session.run(
@@ -168,10 +170,10 @@ def main():
                         if attempt < 2:
                             time.sleep(1)
 
-        print(f"  Created {similar_count} SIMILAR_TO edges")
+        logger.info("Created %d SIMILAR_TO edges", similar_count)
 
     driver.close()
-    print("\nDone.")
+    logger.info("Done.")
 
 
 if __name__ == "__main__":

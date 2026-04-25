@@ -6,10 +6,13 @@ All connection parameters come from config.yaml.
 from __future__ import annotations
 
 import json
+import logging
 import subprocess
 from typing import Any
 
 from shared.model_config import get_oci_config
+
+logger = logging.getLogger(__name__)
 
 
 def publish_skill_to_oci(
@@ -44,10 +47,15 @@ def publish_skill_to_oci(
     try:
         # oras is the standard CLI for OCI artifact operations
         cmd = [
-            "oras", "push", ref,
-            "--annotation", f"org.agentskills.name={skill_name}",
-            "--annotation", f"org.agentskills.version={version}",
-            "--annotation", f"org.agentskills.author={author}",
+            "oras",
+            "push",
+            ref,
+            "--annotation",
+            f"org.agentskills.name={skill_name}",
+            "--annotation",
+            f"org.agentskills.version={version}",
+            "--annotation",
+            f"org.agentskills.author={author}",
         ]
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
         if proc.returncode != 0:
@@ -77,9 +85,7 @@ def validate_skill_yaml(skill_content: str) -> str:
     errors: list[str] = []
     warnings: list[str] = []
 
-    frontmatter_match = re.search(
-        r"^---\s*\n(.*?)\n---", skill_content, re.DOTALL
-    )
+    frontmatter_match = re.search(r"^---\s*\n(.*?)\n---", skill_content, re.DOTALL)
     if not frontmatter_match:
         errors.append("Missing YAML frontmatter (must start with ---)")
         return json.dumps({"valid": False, "errors": errors, "warnings": warnings})
@@ -103,20 +109,20 @@ def validate_skill_yaml(skill_content: str) -> str:
 
     if "description" not in fm:
         errors.append("Missing required field: description")
-    elif len(fm["description"]) > 1000:
-        errors.append(
-            f"Description is {len(fm['description'])} chars (max 1000)"
-        )
+    elif len(fm["description"]) > 1024:
+        errors.append(f"Description is {len(fm['description'])} chars (max 1024)")
 
-    body = skill_content[frontmatter_match.end():].strip()
+    body = skill_content[frontmatter_match.end() :].strip()
     if not body:
         warnings.append("Skill body (instructions) is empty")
 
-    return json.dumps({
-        "valid": len(errors) == 0,
-        "errors": errors,
-        "warnings": warnings,
-    })
+    return json.dumps(
+        {
+            "valid": len(errors) == 0,
+            "errors": errors,
+            "warnings": warnings,
+        }
+    )
 
 
 def list_oci_skills(tag_filter: str = "") -> str:

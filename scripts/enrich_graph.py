@@ -11,6 +11,8 @@ Non-destructive: only creates edges via MERGE, never deletes.
 from __future__ import annotations
 
 import json
+import logging
+import os
 import sys
 import time
 from pathlib import Path
@@ -20,7 +22,13 @@ from neo4j import GraphDatabase
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from shared.model_config import get_neo4j_config, load_config
+logging.basicConfig(
+    level=getattr(logging, os.environ.get("LOG_LEVEL", "INFO").upper(), logging.INFO),
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+)
+logger = logging.getLogger(__name__)
+
+from shared.model_config import load_config
 
 RELATIONSHIP_TYPES = ["DEPENDS_ON", "ALTERNATIVE_TO", "EXTENDS", "PRECEDES", "COMPLEMENTS"]
 
@@ -58,43 +66,57 @@ BATCH_SIZE = 5
 MAX_PAIRS = 2000
 
 
+_LLM_MAX_RETRIES = 3
+
+
 def _classify_pair(name_a: str, desc_a: str, name_b: str, desc_b: str, llm_cfg: dict) -> list[dict]:
     """Ask the LLM to classify relationships between two skills."""
     prompt = CLASSIFIER_PROMPT.format(
-        name_a=name_a, desc_a=desc_a or "No description",
-        name_b=name_b, desc_b=desc_b or "No description",
+        name_a=name_a,
+        desc_a=desc_a or "No description",
+        name_b=name_b,
+        desc_b=desc_b or "No description",
     )
 
-    try:
-        resp = requests.post(
-            f"{llm_cfg['api_base']}/chat/completions",
-            json={
-                "model": llm_cfg["id"],
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.1,
-                "max_tokens": 512,
-            },
-            headers={"Content-Type": "application/json"},
-            timeout=30,
-        )
-        resp.raise_for_status()
-        content = resp.json()["choices"][0]["message"]["content"].strip()
+    for attempt in range(_LLM_MAX_RETRIES):
+        try:
+            resp = requests.post(
+                f"{llm_cfg['api_base']}/chat/completions",
+                json={
+                    "model": llm_cfg["id"],
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": 0.1,
+                    "max_tokens": 512,
+                },
+                headers={"Content-Type": "application/json"},
+                timeout=30,
+            )
+            if resp.status_code == 429 or resp.status_code >= 500:
+                wait = 2**attempt
+                logger.warning("LLM returned %d, retrying in %ds", resp.status_code, wait)
+                time.sleep(wait)
+                continue
+            resp.raise_for_status()
+            content = resp.json()["choices"][0]["message"]["content"].strip()
 
-        if content.startswith("```"):
-            content = content.split("\n", 1)[1].rsplit("```", 1)[0]
+            if content.startswith("```"):
+                content = content.split("\n", 1)[1].rsplit("```", 1)[0]
 
-        relationships = json.loads(content)
-        valid = []
-        for r in relationships:
-            if (
-                isinstance(r, dict)
-                and r.get("type") in RELATIONSHIP_TYPES
-                and r.get("confidence", 0) >= 0.6
-            ):
-                valid.append(r)
-        return valid
-    except Exception as e:
-        return []
+            relationships = json.loads(content)
+            valid = []
+            for r in relationships:
+                if isinstance(r, dict) and r.get("type") in RELATIONSHIP_TYPES and r.get("confidence", 0) >= 0.6:
+                    valid.append(r)
+            return valid
+        except (requests.RequestException, json.JSONDecodeError, KeyError, IndexError) as e:
+            if attempt < _LLM_MAX_RETRIES - 1:
+                logger.warning("Classify attempt %d failed for %s <-> %s: %s", attempt + 1, name_a, name_b, e)
+                time.sleep(2**attempt)
+            else:
+                logger.exception(
+                    "Failed to classify pair %s <-> %s after %d attempts", name_a, name_b, _LLM_MAX_RETRIES
+                )
+    return []
 
 
 def _write_relationship(session, eid_a: str, eid_b: str, rel: dict):
@@ -113,8 +135,11 @@ def _write_relationship(session, eid_a: str, eid_b: str, rel: dict):
         f"MATCH (b:Skill) WHERE elementId(b) = $eid_b "
         f"MERGE (a)-[r:{rel_type}]->(b) "
         f"SET r.confidence = $confidence, r.description = $reason, r.direction = $direction",
-        eid_a=eid_a, eid_b=eid_b,
-        confidence=confidence, reason=reason, direction=direction,
+        eid_a=eid_a,
+        eid_b=eid_b,
+        confidence=confidence,
+        reason=reason,
+        direction=direction,
     )
 
 
@@ -129,7 +154,7 @@ def main():
     )
 
     with driver.session(database=neo4j_cfg.get("database", "neo4j")) as session:
-        print("Step 1: Fetch SIMILAR_TO pairs for classification")
+        logger.info("Step 1: Fetch SIMILAR_TO pairs for classification")
         result = session.run(
             "MATCH (a:Skill)-[r:SIMILAR_TO]-(b:Skill) "
             "WHERE elementId(a) < elementId(b) "
@@ -142,10 +167,10 @@ def main():
             f"LIMIT {MAX_PAIRS}"
         )
         pairs = [dict(r) for r in result]
-        print(f"  Found {len(pairs)} SIMILAR_TO pairs to classify")
+        logger.info("Found %d SIMILAR_TO pairs to classify", len(pairs))
 
         if not pairs:
-            print("No pairs to classify. Run bootstrap_embeddings.py first.")
+            logger.warning("No pairs to classify. Run bootstrap_embeddings.py first.")
             driver.close()
             return
 
@@ -153,11 +178,13 @@ def main():
         edges_created = 0
         for i, pair in enumerate(pairs):
             if i % 50 == 0 and i > 0:
-                print(f"  [{i}/{len(pairs)}] classified={classified}, edges={edges_created}")
+                logger.info("[%d/%d] classified=%d, edges=%d", i, len(pairs), classified, edges_created)
 
             relationships = _classify_pair(
-                pair["name_a"], pair["desc_a"],
-                pair["name_b"], pair["desc_b"],
+                pair["name_a"],
+                pair["desc_a"],
+                pair["name_b"],
+                pair["desc_b"],
                 llm_cfg,
             )
 
@@ -170,7 +197,7 @@ def main():
             if classified % BATCH_SIZE == 0:
                 time.sleep(0.5)
 
-        print(f"\nDone. Classified: {classified} pairs, Created: {edges_created} edges")
+        logger.info("Done. Classified: %d pairs, Created: %d edges", classified, edges_created)
 
     driver.close()
 

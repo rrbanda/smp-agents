@@ -6,19 +6,27 @@ from google.adk import Agent
 from google.adk.skills import load_skill_from_dir
 from google.adk.tools.skill_toolset import SkillToolset
 
-from shared.model_config import get_agent_model, get_agent_config
+from shared.model_config import get_agent_config, get_agent_model
 from shared.neo4j_tools import (
-    query_skill_graph,
-    find_skill,
     explore_skill_neighborhood,
+    find_skill,
     get_skill_dependencies,
+    query_skill_graph,
 )
 
 _cfg = get_agent_config("kg_qa")
 _skills_dir = pathlib.Path(__file__).parent / "skills"
 
 _kg_skill = load_skill_from_dir(_skills_dir / "kg-qa")
-_skill_toolset = SkillToolset(skills=[_kg_skill])
+_skill_toolset = SkillToolset(
+    skills=[_kg_skill],
+    additional_tools=[
+        query_skill_graph,
+        find_skill,
+        explore_skill_neighborhood,
+        get_skill_dependencies,
+    ],
+)
 
 root_agent = Agent(
     model=get_agent_model(),
@@ -41,11 +49,5 @@ root_agent = Agent(
         "  WHERE s.name = $identifier OR s.id = $identifier\n\n"
         "Always include the Cypher query used in your response."
     ),
-    tools=[
-        _skill_toolset,
-        query_skill_graph,
-        find_skill,
-        explore_skill_neighborhood,
-        get_skill_dependencies,
-    ],
+    tools=[_skill_toolset],
 )

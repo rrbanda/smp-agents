@@ -9,7 +9,7 @@ from google.adk import Agent
 from google.adk.skills import models
 from google.adk.tools.skill_toolset import SkillToolset
 
-from shared.model_config import get_agent_model, get_agent_config
+from shared.model_config import get_agent_config, get_agent_model
 from shared.oci_tools import publish_skill_to_oci, validate_skill_yaml
 
 _cfg = get_agent_config("skill_builder")
@@ -36,7 +36,7 @@ when this skill is loaded into its context.
 | Field | Required | Type | Constraints |
 |-------|----------|------|-------------|
 | name | Yes | string | Must be kebab-case (lowercase, hyphens only). Must match the directory name. |
-| description | Yes | string | Max 1000 characters. Should be a single sentence. |
+| description | Yes | string | Max 1024 characters. Should be a single sentence. |
 
 ## Directory Structure
 
@@ -73,7 +73,9 @@ Below is a complete, valid skill specification for reference:
 ```markdown
 ---
 name: code-review
-description: Reviews code changes for quality, security, and adherence to team coding standards. Provides actionable feedback with severity ratings.
+description: >-
+  Reviews code changes for quality, security, and adherence to team
+  coding standards. Provides actionable feedback with severity ratings.
 ---
 
 # Code Review Instructions
@@ -194,7 +196,13 @@ _skill_creator = models.Skill(
     ),
 )
 
-_skill_toolset = SkillToolset(skills=[_skill_creator])
+_skill_toolset = SkillToolset(
+    skills=[_skill_creator],
+    additional_tools=[
+        validate_skill_yaml,
+        publish_skill_to_oci,
+    ],
+)
 
 root_agent = Agent(
     model=get_agent_model(),
@@ -213,9 +221,5 @@ root_agent = Agent(
         "publish_skill_to_oci\n\n"
         "Always output complete, valid SKILL.md content the user can save directly."
     ),
-    tools=[
-        _skill_toolset,
-        validate_skill_yaml,
-        publish_skill_to_oci,
-    ],
+    tools=[_skill_toolset],
 )

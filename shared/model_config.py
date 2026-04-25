@@ -4,6 +4,7 @@ Reads config.yaml from the project root. Environment variables
 can override secrets via ${VAR_NAME} syntax in YAML values.
 """
 
+import logging
 import os
 import pathlib
 import re
@@ -13,6 +14,8 @@ from typing import Any
 import yaml
 from google.adk.models.lite_llm import LiteLlm
 
+logger = logging.getLogger(__name__)
+
 _PROJECT_ROOT = pathlib.Path(__file__).parent.parent
 _ENV_VAR_PATTERN = re.compile(r"\$\{(\w+)(?::-([^}]*))?\}")
 
@@ -20,6 +23,7 @@ _ENV_VAR_PATTERN = re.compile(r"\$\{(\w+)(?::-([^}]*))?\}")
 def _resolve_env_vars(value: Any) -> Any:
     """Recursively resolve ${VAR_NAME} and ${VAR:-default} references."""
     if isinstance(value, str):
+
         def _replace(m: re.Match) -> str:
             var_name = m.group(1)
             default = m.group(2)
@@ -29,6 +33,7 @@ def _resolve_env_vars(value: Any) -> Any:
             if default is not None:
                 return default
             return m.group(0)
+
         return _ENV_VAR_PATTERN.sub(_replace, value)
     if isinstance(value, dict):
         return {k: _resolve_env_vars(v) for k, v in value.items()}
@@ -37,12 +42,29 @@ def _resolve_env_vars(value: Any) -> Any:
     return value
 
 
+_REQUIRED_ENV_VARS = ["NEO4J_PASSWORD"]
+
+
+def validate_env() -> list[str]:
+    """Check that required environment variables are set. Returns missing names."""
+    return [v for v in _REQUIRED_ENV_VARS if not os.environ.get(v)]
+
+
 @lru_cache(maxsize=1)
 def load_config() -> dict:
     """Load and cache the project configuration from config.yaml."""
     config_path = _PROJECT_ROOT / "config.yaml"
-    with open(config_path, encoding="utf-8") as f:
-        raw = yaml.safe_load(f)
+    if not config_path.is_file():
+        raise FileNotFoundError(
+            f"Configuration file not found: {config_path}. Copy config.yaml.example to config.yaml and set values."
+        )
+    try:
+        with open(config_path, encoding="utf-8") as f:
+            raw = yaml.safe_load(f)
+    except yaml.YAMLError as e:
+        raise RuntimeError(f"Invalid YAML in {config_path}: {e}") from e
+    if not isinstance(raw, dict):
+        raise RuntimeError(f"Expected mapping in {config_path}, got {type(raw).__name__}")
     return _resolve_env_vars(raw)
 
 

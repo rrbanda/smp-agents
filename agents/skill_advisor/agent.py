@@ -8,17 +8,16 @@ patterns in a single SkillToolset.
 import pathlib
 
 from google.adk import Agent
-from google.adk.skills import models
-from google.adk.skills import load_skill_from_dir
+from google.adk.skills import load_skill_from_dir, models
 from google.adk.tools.skill_toolset import SkillToolset
 
-from shared.model_config import get_agent_model, get_agent_config
+from shared.model_config import get_agent_config, get_agent_model
 from shared.neo4j_tools import (
-    query_skill_graph,
-    get_skill_dependencies,
+    explore_skill_neighborhood,
     get_complementary_skills,
     get_skill_alternatives,
-    explore_skill_neighborhood,
+    get_skill_dependencies,
+    query_skill_graph,
 )
 from shared.semantic_search_tools import semantic_search_skills
 
@@ -61,7 +60,17 @@ _output_format_skill = models.Skill(
 # Pattern 2: File-based skill -- has L3 reference for scoring strategy
 _advisor_skill = load_skill_from_dir(_skills_dir / "skill-advisor")
 
-_skill_toolset = SkillToolset(skills=[_output_format_skill, _advisor_skill])
+_skill_toolset = SkillToolset(
+    skills=[_output_format_skill, _advisor_skill],
+    additional_tools=[
+        semantic_search_skills,
+        query_skill_graph,
+        get_skill_dependencies,
+        get_complementary_skills,
+        get_skill_alternatives,
+        explore_skill_neighborhood,
+    ],
+)
 
 root_agent = Agent(
     model=get_agent_model(),
@@ -81,13 +90,5 @@ root_agent = Agent(
         "8. Load the advisor-output-format skill for the response schema\n"
         "9. Return ranked recommendations in the specified JSON format"
     ),
-    tools=[
-        _skill_toolset,
-        semantic_search_skills,
-        query_skill_graph,
-        get_skill_dependencies,
-        get_complementary_skills,
-        get_skill_alternatives,
-        explore_skill_neighborhood,
-    ],
+    tools=[_skill_toolset],
 )

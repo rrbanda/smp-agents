@@ -1,0 +1,47 @@
+{
+  "eval_set_id": "kg_qa_count_skills",
+  "name": "KG Q&A - Count Skills",
+  "description": "Validates that the KG Q&A agent uses Cypher to count skills in the graph and returns a grounded numeric answer.",
+  "eval_cases": [
+    {
+      "eval_id": "count_all_skills",
+      "conversation": [
+        {
+          "invocation_id": "e-kq-001",
+          "user_content": {
+            "parts": [
+              {
+                "text": "How many skills are in the graph?"
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "Based on querying the Neo4j knowledge graph, there are skills registered in the graph.\n\nCypher used: MATCH (s:Skill) RETURN count(s) AS total_skills"
+              }
+            ],
+            "role": "model"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "name": "query_skill_graph",
+                "args": {
+                  "cypher_query": "MATCH (s:Skill) RETURN count(s) AS total_skills"
+                }
+              }
+            ],
+            "intermediate_responses": []
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "kg_qa",
+        "user_id": "eval_user",
+        "state": {}
+      }
+    }
+  ]
+}

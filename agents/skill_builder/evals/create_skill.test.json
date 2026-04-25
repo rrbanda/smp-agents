@@ -1,0 +1,47 @@
+{
+  "eval_set_id": "skill_builder_create_skill",
+  "name": "Skill Builder - Create Skill",
+  "description": "Validates that the Skill Builder generates a valid SKILL.md specification following agentskills.io format when asked to create a new skill.",
+  "eval_cases": [
+    {
+      "eval_id": "create_dockerfile_review_skill",
+      "conversation": [
+        {
+          "invocation_id": "e-sb-001",
+          "user_content": {
+            "parts": [
+              {
+                "text": "Create a skill for reviewing Dockerfiles for best practices and security issues."
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "Here is the generated skill specification:\n\n```markdown\n---\nname: dockerfile-review\ndescription: Reviews Dockerfiles for best practices, security vulnerabilities, and optimization opportunities. Provides actionable feedback with severity ratings.\n---\n\n# Dockerfile Review Instructions\n\nWhen asked to review a Dockerfile, follow this methodology:\n\n## Step 1: Base Image Analysis\n- Check if the base image is pinned to a specific version\n- Verify the base image is from a trusted source\n- Recommend slim/distroless variants where possible\n\n## Step 2: Security Review\n- Check for running as root (missing USER directive)\n- Look for secrets or credentials in ENV or COPY\n- Verify no unnecessary packages are installed\n- Check for HEALTHCHECK directive\n\n## Step 3: Best Practices\n- Verify multi-stage builds are used where appropriate\n- Check layer ordering for cache efficiency\n- Ensure .dockerignore is referenced\n- Validate EXPOSE directives match application ports\n\n## Step 4: Provide Feedback\nFor each finding, report severity (critical/major/minor/suggestion), the Dockerfile line, the issue, and how to fix it.\n```\n\nWould you like me to refine this or publish it to the OCI registry?"
+              }
+            ],
+            "role": "model"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "name": "validate_skill_yaml",
+                "args": {
+                  "skill_md_content": "---\nname: dockerfile-review\ndescription: Reviews Dockerfiles for best practices, security vulnerabilities, and optimization opportunities.\n---\n\n# Dockerfile Review Instructions\n..."
+                }
+              }
+            ],
+            "intermediate_responses": []
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "skill_builder",
+        "user_id": "eval_user",
+        "state": {}
+      }
+    }
+  ]
+}

@@ -6,21 +6,31 @@ from google.adk import Agent
 from google.adk.skills import load_skill_from_dir
 from google.adk.tools.skill_toolset import SkillToolset
 
-from shared.model_config import get_agent_model, get_agent_config
+from shared.model_config import get_agent_config, get_agent_model
 from shared.neo4j_tools import (
-    query_skill_graph,
     find_skill,
+    get_complementary_skills,
+    get_skill_alternatives,
     get_skill_dependencies,
     get_skill_similarity,
-    get_skill_alternatives,
-    get_complementary_skills,
+    query_skill_graph,
 )
 
 _cfg = get_agent_config("bundle_validator")
 _skills_dir = pathlib.Path(__file__).parent / "skills"
 
 _validator_skill = load_skill_from_dir(_skills_dir / "bundle-validator")
-_skill_toolset = SkillToolset(skills=[_validator_skill])
+_skill_toolset = SkillToolset(
+    skills=[_validator_skill],
+    additional_tools=[
+        query_skill_graph,
+        find_skill,
+        get_skill_dependencies,
+        get_skill_similarity,
+        get_skill_alternatives,
+        get_complementary_skills,
+    ],
+)
 
 root_agent = Agent(
     model=get_agent_model(),
@@ -39,13 +49,5 @@ root_agent = Agent(
         "8. Categorize each finding as error, warning, or info\n\n"
         "Return all findings as a structured JSON array."
     ),
-    tools=[
-        _skill_toolset,
-        query_skill_graph,
-        find_skill,
-        get_skill_dependencies,
-        get_skill_similarity,
-        get_skill_alternatives,
-        get_complementary_skills,
-    ],
+    tools=[_skill_toolset],
 )

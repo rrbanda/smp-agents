@@ -1,0 +1,60 @@
+{
+  "eval_set_id": "skill_advisor_recommend_skills",
+  "name": "Skill Advisor - Recommend Skills",
+  "description": "Validates that the Skill Advisor uses semantic search and graph tools to recommend complementary skills for a given topic.",
+  "eval_cases": [
+    {
+      "eval_id": "recommend_kubernetes_skills",
+      "conversation": [
+        {
+          "invocation_id": "e-sa-001",
+          "user_content": {
+            "parts": [
+              {
+                "text": "Recommend skills for Kubernetes deployment and management."
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "Based on my analysis of the skills graph, here are recommended skills for Kubernetes deployment and management:\n\n[{\"skill_name\": \"deploy-to-k8s\", \"score\": 0.92, \"reason\": \"Core deployment skill for Kubernetes workloads\", \"category\": \"DevOps\", \"relationship\": \"COMPLEMENTS\"}, {\"skill_name\": \"k8s-troubleshooting\", \"score\": 0.88, \"reason\": \"Essential for diagnosing deployment issues\", \"category\": \"DevOps\", \"relationship\": \"COMPLEMENTS\"}, {\"skill_name\": \"helm-chart-review\", \"score\": 0.85, \"reason\": \"Validates Helm charts used in Kubernetes deployments\", \"category\": \"DevOps\", \"relationship\": \"DEPENDS_ON\"}]"
+              }
+            ],
+            "role": "model"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "name": "semantic_search_skills",
+                "args": {
+                  "query": "Kubernetes deployment and management",
+                  "top_k": 10
+                }
+              },
+              {
+                "name": "get_complementary_skills",
+                "args": {
+                  "identifier": "deploy-to-k8s"
+                }
+              },
+              {
+                "name": "get_skill_dependencies",
+                "args": {
+                  "identifier": "deploy-to-k8s"
+                }
+              }
+            ],
+            "intermediate_responses": []
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "skill_advisor",
+        "user_id": "eval_user",
+        "state": {}
+      }
+    }
+  ]
+}
