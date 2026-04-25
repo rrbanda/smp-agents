@@ -34,9 +34,9 @@ _agent_card = AgentCard(
     description=_cfg["description"],
     url=f"http://{_host}:{_port}/",
     version=_a2a_cfg.get("version", "0.1.0"),
-    defaultInputModes=["application/json"],
-    defaultOutputModes=["application/json"],
-    capabilities=AgentCapabilities(streaming=False, pushNotifications=False),
+    default_input_modes=["application/json"],
+    default_output_modes=["application/json"],
+    capabilities=AgentCapabilities(streaming=False, push_notifications=False),
     skills=[
         AgentSkill(
             id="bundle-validation",

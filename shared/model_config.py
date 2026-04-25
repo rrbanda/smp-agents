@@ -20,11 +20,11 @@ _PROJECT_ROOT = pathlib.Path(__file__).parent.parent
 _ENV_VAR_PATTERN = re.compile(r"\$\{(\w+)(?::-([^}]*))?\}")
 
 
-def _resolve_env_vars(value: Any) -> Any:
+def _resolve_env_vars(value: Any) -> Any:  # noqa: ANN401
     """Recursively resolve ${VAR_NAME} and ${VAR:-default} references."""
     if isinstance(value, str):
 
-        def _replace(m: re.Match) -> str:
+        def _replace(m: re.Match[str]) -> str:
             var_name = m.group(1)
             default = m.group(2)
             env_val = os.environ.get(var_name)
@@ -51,7 +51,7 @@ def validate_env() -> list[str]:
 
 
 @lru_cache(maxsize=1)
-def load_config() -> dict:
+def load_config() -> dict[str, Any]:
     """Load and cache the project configuration from config.yaml."""
     config_path = _PROJECT_ROOT / "config.yaml"
     if not config_path.is_file():
@@ -65,7 +65,7 @@ def load_config() -> dict:
         raise RuntimeError(f"Invalid YAML in {config_path}: {e}") from e
     if not isinstance(raw, dict):
         raise RuntimeError(f"Expected mapping in {config_path}, got {type(raw).__name__}")
-    return _resolve_env_vars(raw)
+    return _resolve_env_vars(raw)  # type: ignore[no-any-return]
 
 
 def get_agent_model() -> LiteLlm:
@@ -77,21 +77,21 @@ def get_agent_model() -> LiteLlm:
     return LiteLlm(**kwargs)
 
 
-def get_neo4j_config() -> dict:
+def get_neo4j_config() -> dict[str, Any]:
     """Returns Neo4j connection parameters from config."""
-    return load_config()["neo4j"]
+    return load_config()["neo4j"]  # type: ignore[no-any-return]
 
 
-def get_oci_config() -> dict:
+def get_oci_config() -> dict[str, Any]:
     """Returns OCI registry parameters from config."""
-    return load_config()["oci"]
+    return load_config()["oci"]  # type: ignore[no-any-return]
 
 
-def get_embedding_config() -> dict:
+def get_embedding_config() -> dict[str, Any]:
     """Returns embedding model parameters from config."""
-    return load_config()["model"]["embedding"]
+    return load_config()["model"]["embedding"]  # type: ignore[no-any-return]
 
 
-def get_agent_config(agent_name: str) -> dict:
+def get_agent_config(agent_name: str) -> dict[str, Any]:
     """Returns agent-specific configuration."""
-    return load_config()["agents"][agent_name]
+    return load_config()["agents"][agent_name]  # type: ignore[no-any-return]

@@ -35,7 +35,7 @@ def _get_embedding(text: str) -> list[float]:
             )
             response.raise_for_status()
             data = response.json()
-            return data["data"][0]["embedding"]
+            return data["data"][0]["embedding"]  # type: ignore[no-any-return]
         except (requests.RequestException, KeyError, IndexError) as e:
             last_err = e
             if attempt < _EMBED_MAX_RETRIES - 1:

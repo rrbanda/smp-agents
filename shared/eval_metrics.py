@@ -9,7 +9,7 @@ from __future__ import annotations
 import statistics
 
 from google.adk.evaluation.conversation_scenarios import ConversationScenario
-from google.adk.evaluation.eval_case import Invocation
+from google.adk.evaluation.eval_case import IntermediateData, Invocation
 from google.adk.evaluation.eval_metrics import EvalMetric, EvalStatus
 from google.adk.evaluation.evaluator import EvaluationResult, PerInvocationResult
 
@@ -41,13 +41,15 @@ def tool_coverage(
     0.0 otherwise. Useful for catching regressions where agents stop using
     graph/search tools and rely only on SkillToolset framework tools.
     """
-    per_invocation_results = []
+    per_invocation_results: list[PerInvocationResult] = []
 
     for invocation in actual_invocations:
-        tool_names = set()
-        if invocation.intermediate_data and invocation.intermediate_data.tool_uses:
-            for tool_use in invocation.intermediate_data.tool_uses:
-                tool_names.add(tool_use.name)
+        tool_names: set[str] = set()
+        idata = invocation.intermediate_data
+        if isinstance(idata, IntermediateData) and idata.tool_uses:
+            for tool_use in idata.tool_uses:
+                if tool_use.name is not None:
+                    tool_names.add(tool_use.name)
 
         used_domain_tool = bool(tool_names & DOMAIN_TOOLS)
         score = 1.0 if used_domain_tool else 0.0
@@ -67,8 +69,11 @@ def tool_coverage(
             overall_eval_status=EvalStatus.NOT_EVALUATED,
         )
 
-    average_score = statistics.mean(r.score for r in per_invocation_results)
-    threshold = eval_metric.criterion.threshold
+    scores = [r.score for r in per_invocation_results if r.score is not None]
+    average_score = statistics.mean(scores) if scores else 0.0
+    threshold = 0.8
+    if eval_metric.criterion is not None and eval_metric.criterion.threshold is not None:
+        threshold = eval_metric.criterion.threshold
     overall_status = EvalStatus.PASSED if average_score >= threshold else EvalStatus.FAILED
 
     return EvaluationResult(
