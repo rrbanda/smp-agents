@@ -23,7 +23,8 @@ _TIMEOUT = 15
 
 
 def _catalog_url() -> str:
-    return get_catalog_config()["base_url"].rstrip("/")
+    url: str = get_catalog_config()["base_url"]
+    return url.rstrip("/")
 
 
 def _http_get(url: str, *, accept: str = "application/json") -> Any:
@@ -138,7 +139,8 @@ def get_skill_content(namespace: str, name: str, version: str) -> str:
         The raw SKILL.md markdown content as a string.
     """
     url = f"{_catalog_url()}/api/v1/skills/{namespace}/{name}/versions/{version}/content"
-    return _http_get(url, accept="text/markdown")
+    result: str = _http_get(url, accept="text/markdown")
+    return result
 
 
 def trigger_catalog_sync() -> str:
