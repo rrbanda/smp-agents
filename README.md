@@ -327,21 +327,79 @@ python scripts/sync_catalog_to_neo4j.py
 python scripts/export_skills_to_catalog.py
 ```
 
-## Agent-to-Agent (A2A) Protocol
+## Using the Agents (A2A Protocol)
 
-Each agent exposes the [A2A protocol](https://google.github.io/A2A) for interoperability:
+Every agent exposes the [A2A protocol](https://google.github.io/A2A) -- a JSON-RPC interface that any UI, CLI, or orchestrator can call. No SDK required.
 
-- `GET /.well-known/agent-card.json` -- Agent card for discovery (name, capabilities, skills)
-- `POST /` -- JSON-RPC endpoint (`message/send`, `message/stream`)
-- `GET /healthz` -- Liveness probe
-- `GET /readyz` -- Readiness probe (checks Neo4j connectivity)
+### Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/.well-known/agent-card.json` | Agent discovery card (name, capabilities, tools) |
+| `POST` | `/` | JSON-RPC endpoint (`message/send`) |
+| `GET` | `/healthz` | Liveness probe (always 200) |
+| `GET` | `/readyz` | Readiness probe (checks Neo4j) |
+
+### Request Format
+
+All agents accept the same JSON-RPC envelope:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "message/send",
+  "id": "unique-request-id",
+  "params": {
+    "message": {
+      "messageId": "unique-msg-id",
+      "role": "user",
+      "parts": [{"kind": "text", "text": "your question here"}]
+    }
+  }
+}
+```
+
+### Response Format
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "unique-request-id",
+  "result": {
+    "artifacts": [
+      {
+        "parts": [{"kind": "text", "text": "agent response here"}]
+      }
+    ]
+  }
+}
+```
+
+To extract the text: `response.result.artifacts[0].parts[0].text`
+
+### Agent Discovery
 
 ```bash
-# Discover agent capabilities
-curl http://localhost:8001/.well-known/agent-card.json | jq .
+# List all agents and their capabilities
+BASE=https://skill-advisor-smp-agents.apps.ocp.v7hjl.sandbox2288.opentlc.com
 
-# Send a task
-curl -X POST http://localhost:8001/ \
+curl -s $BASE/.well-known/agent-card.json | jq '{name, description, skills: [.skills[].name]}'
+```
+
+Response:
+
+```json
+{
+  "name": "Skill Advisor",
+  "description": "Recommends complementary skills based on user needs and current cart.",
+  "skills": ["model", "list_skills", "load_skill", "semantic_search_skills", "query_skill_graph", "get_skill_dependencies", "get_complementary_skills", "get_skill_alternatives", "explore_skill_neighborhood"]
+}
+```
+
+### 1. Skill Advisor -- Recommend skills
+
+```bash
+curl -s -X POST $BASE/ \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
@@ -351,11 +409,202 @@ curl -X POST http://localhost:8001/ \
       "message": {
         "messageId": "msg-001",
         "role": "user",
-        "parts": [{"kind": "text", "text": "Recommend skills for Kubernetes"}]
+        "parts": [{"kind": "text", "text": "Recommend 3 skills for Kubernetes deployment"}]
       }
     }
-  }'
+  }' | jq -r '.result.artifacts[0].parts[0].text'
 ```
+
+Example response:
+
+```json
+[
+  {
+    "skill_name": "kubernetes-deployment",
+    "score": 0.92,
+    "reason": "Kubernetes deployment workflow for container orchestration.",
+    "category": "devops",
+    "relationship": "SIMILAR_TO"
+  },
+  {
+    "skill_name": "k8s-deploy",
+    "score": 0.89,
+    "reason": "Deploy and manage Kubernetes workloads with progressive delivery.",
+    "category": "devops",
+    "relationship": "SIMILAR_TO"
+  },
+  {
+    "skill_name": "azure-kubernetes",
+    "score": 0.85,
+    "reason": "Plan and configure production-ready AKS clusters.",
+    "category": "devops",
+    "relationship": "SIMILAR_TO"
+  }
+]
+```
+
+### 2. KG Q&A -- Query the knowledge graph
+
+```bash
+BASE=https://kg-qa-smp-agents.apps.ocp.v7hjl.sandbox2288.opentlc.com
+
+curl -s -X POST $BASE/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "message/send",
+    "id": "2",
+    "params": {
+      "message": {
+        "messageId": "msg-002",
+        "role": "user",
+        "parts": [{"kind": "text", "text": "How many skills are in the graph? Which domains do they belong to?"}]
+      }
+    }
+  }' | jq -r '.result.artifacts[0].parts[0].text'
+```
+
+Example response:
+
+> There are **2,121 skills** in the graph and **25,711 relationships** between them. The skills belong to the following domains: testing (295), security (140), ai-agents (128), engineering (121), backend (93), devops (93), frontend (43), docs (36), observability (23), ...
+
+### 3. Bundle Validator -- Validate a skill bundle
+
+```bash
+BASE=https://bundle-validator-smp-agents.apps.ocp.v7hjl.sandbox2288.opentlc.com
+
+curl -s -X POST $BASE/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "message/send",
+    "id": "3",
+    "params": {
+      "message": {
+        "messageId": "msg-003",
+        "role": "user",
+        "parts": [{"kind": "text", "text": "Validate a bundle containing: dockerfile-reviewer, openapi-generator, document-reviewer"}]
+      }
+    }
+  }' | jq -r '.result.artifacts[0].parts[0].text'
+```
+
+Example response:
+
+> **API Without Auth**: openapi-generator uses web_fetch which relates to API calls. However, there are no skills related to auth, credentials, or tokens.
+>
+> ```json
+> [{"severity": "warning", "pattern": "API Without Auth", "details": "openapi-generator may need authentication skills"}]
+> ```
+
+### 4. Playground -- Search and test skills
+
+```bash
+BASE=https://playground-smp-agents.apps.ocp.v7hjl.sandbox2288.opentlc.com
+
+curl -s -X POST $BASE/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "message/send",
+    "id": "4",
+    "params": {
+      "message": {
+        "messageId": "msg-004",
+        "role": "user",
+        "parts": [{"kind": "text", "text": "Search the skill catalog for document review skills"}]
+      }
+    }
+  }' | jq -r '.result.artifacts[0].parts[0].text'
+```
+
+Example response:
+
+> I found two document review skills: `business/document-reviewer` and `examples/document-reviewer`. Would you like me to load one of them?
+
+### 5. Skill Builder -- Create new skills
+
+```bash
+BASE=https://skill-builder-smp-agents.apps.ocp.v7hjl.sandbox2288.opentlc.com
+
+curl -s -X POST $BASE/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "message/send",
+    "id": "5",
+    "params": {
+      "message": {
+        "messageId": "msg-005",
+        "role": "user",
+        "parts": [{"kind": "text", "text": "Create a skill for reviewing Python code for security vulnerabilities"}]
+      }
+    }
+  }' | jq -r '.result.artifacts[0].parts[0].text'
+```
+
+Example response:
+
+````markdown
+---
+name: security-vulnerability-review
+description: Reviews Python code for common security vulnerabilities and provides actionable feedback.
+---
+
+# Security Vulnerability Review Instructions
+
+When asked to review Python code for security vulnerabilities, follow these steps:
+
+## Step 1: Understand the Context
+Ask for the purpose of the code and any specific security requirements.
+
+## Step 2: Static Analysis
+Use static analysis tools (e.g., Bandit, SonarQube) to detect potential vulnerabilities.
+...
+````
+
+### Integrating with a UI
+
+For a frontend application, here's a minimal JavaScript example:
+
+```javascript
+async function askAgent(baseUrl, question) {
+  const response = await fetch(baseUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      method: 'message/send',
+      id: crypto.randomUUID(),
+      params: {
+        message: {
+          messageId: crypto.randomUUID(),
+          role: 'user',
+          parts: [{ kind: 'text', text: question }]
+        }
+      }
+    })
+  });
+  const data = await response.json();
+  return data.result.artifacts[0].parts[0].text;
+}
+
+// Usage
+const skills = await askAgent(
+  'https://skill-advisor-smp-agents.apps.example.com/',
+  'Recommend skills for Kubernetes deployment'
+);
+```
+
+### Agent Base URLs
+
+| Agent | Local | OpenShift Route |
+|-------|-------|-----------------|
+| Skill Advisor | `http://localhost:8001` | `https://skill-advisor-smp-agents.apps.<cluster>` |
+| Bundle Validator | `http://localhost:8002` | `https://bundle-validator-smp-agents.apps.<cluster>` |
+| KG Q&A | `http://localhost:8003` | `https://kg-qa-smp-agents.apps.<cluster>` |
+| Playground | `http://localhost:8004` | `https://playground-smp-agents.apps.<cluster>` |
+| Skill Builder | `http://localhost:8005` | `https://skill-builder-smp-agents.apps.<cluster>` |
 
 ## Getting Started
 
