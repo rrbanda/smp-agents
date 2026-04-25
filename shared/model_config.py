@@ -71,7 +71,9 @@ def load_config() -> dict[str, Any]:
 def get_agent_model() -> LiteLlm:
     """Returns a LiteLlm instance from config."""
     cfg = load_config()["model"]["agent"]
-    kwargs: dict[str, Any] = {"model": cfg["id"], "api_base": cfg["api_base"]}
+    kwargs: dict[str, Any] = {"model": cfg["id"]}
+    if cfg.get("api_base"):
+        kwargs["api_base"] = cfg["api_base"]
     if cfg.get("api_key"):
         kwargs["api_key"] = cfg["api_key"]
     return LiteLlm(**kwargs)

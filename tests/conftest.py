@@ -41,8 +41,12 @@ def _neo4j_reachable() -> bool:
         from shared.neo4j_tools import get_neo4j_config
 
         cfg = get_neo4j_config()
-        host = cfg["uri"].split("://")[-1].split(":")[0]
-        url = f"http://{host}:7474/db/{cfg.get('database', 'neo4j')}/tx/commit"
+        http_url = cfg.get("http_url", "")
+        if http_url:
+            url = f"{http_url.rstrip('/')}/db/{cfg.get('database', 'neo4j')}/tx/commit"
+        else:
+            host = cfg["uri"].split("://")[-1].split(":")[0]
+            url = f"http://{host}:7474/db/{cfg.get('database', 'neo4j')}/tx/commit"
         creds = base64.b64encode(f"{cfg['user']}:{cfg['password']}".encode()).decode()
         body = b'{"statements":[{"statement":"RETURN 1"}]}'
         req = urllib.request.Request(

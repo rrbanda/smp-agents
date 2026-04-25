@@ -50,10 +50,14 @@ def _neo4j_http_query(
 ) -> list[dict]:
     """Execute a Cypher query via the Neo4j HTTP Transactional API."""
     cfg = get_neo4j_config()
-    bolt_uri = cfg["uri"]
-    host = bolt_uri.split("://")[-1].split(":")[0]
     db = cfg.get("database", "neo4j")
-    url = f"http://{host}:{_HTTP_PORT}/db/{db}/tx/commit"
+    http_url = cfg.get("http_url", "")
+    if http_url:
+        url = f"{http_url.rstrip('/')}/db/{db}/tx/commit"
+    else:
+        bolt_uri = cfg["uri"]
+        host = bolt_uri.split("://")[-1].split(":")[0]
+        url = f"http://{host}:{_HTTP_PORT}/db/{db}/tx/commit"
     creds = base64.b64encode(f"{cfg['user']}:{cfg['password']}".encode()).decode()
     body = json.dumps({"statements": [{"statement": cypher, "parameters": params or {}}]}).encode()
     headers = {

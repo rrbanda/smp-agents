@@ -10,6 +10,7 @@ model:
 
 neo4j:
   uri: "${NEO4J_URI:-bolt://neo4j.skills-marketplace.svc.cluster.local:7687}"
+  http_url: "${NEO4J_HTTP_URL:-}"
   user: "${NEO4J_USER:-neo4j}"
   password: "${NEO4J_PASSWORD}"
   database: "neo4j"
