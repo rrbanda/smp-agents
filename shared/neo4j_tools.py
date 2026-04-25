@@ -3,6 +3,9 @@
 All connection parameters come from config.yaml with secrets resolved
 from environment variables.
 
+Uses the Neo4j HTTP Transactional API to avoid Bolt-protocol issues
+when running behind an Envoy/Kagenti sidecar proxy.
+
 Graph has two Skill populations:
   - Registry skills keyed by ``id`` (e.g. "docs-code-reviewer")
   - OCI-synced skills keyed by ``name`` (e.g. "active-directory-attacks")
@@ -11,20 +14,47 @@ All query helpers accept a generic identifier and match both keys.
 
 from __future__ import annotations
 
+import base64
 import json
+import urllib.request
 from typing import Any
-
-from neo4j import GraphDatabase
 
 from shared.model_config import get_neo4j_config
 
+_HTTP_PORT = 7474
 
-def _get_driver():
+
+def _neo4j_http_query(cypher: str, params: dict[str, Any] | None = None) -> list[dict]:
+    """Execute a Cypher query via the Neo4j HTTP Transactional API."""
     cfg = get_neo4j_config()
-    return GraphDatabase.driver(
-        cfg["uri"],
-        auth=(cfg["user"], cfg["password"]),
+    bolt_uri = cfg["uri"]
+    host = bolt_uri.split("://")[-1].split(":")[0]
+    db = cfg.get("database", "neo4j")
+    url = f"http://{host}:{_HTTP_PORT}/db/{db}/tx/commit"
+    creds = base64.b64encode(
+        f"{cfg['user']}:{cfg['password']}".encode()
+    ).decode()
+    body = json.dumps(
+        {"statements": [{"statement": cypher, "parameters": params or {}}]}
+    ).encode()
+    req = urllib.request.Request(
+        url,
+        data=body,
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Basic {creds}",
+        },
     )
+    resp = urllib.request.urlopen(req, timeout=30)
+    data = json.loads(resp.read().decode())
+    if data.get("errors"):
+        raise RuntimeError(
+            f"Neo4j query error: {data['errors'][0].get('message', data['errors'])}"
+        )
+    results = data.get("results", [{}])[0]
+    columns = results.get("columns", [])
+    rows = results.get("data", [])
+    return [dict(zip(columns, row["row"])) for row in rows]
 
 
 def _skill_match_clause(var: str = "s", param: str = "identifier") -> str:
@@ -42,16 +72,9 @@ def query_skill_graph(cypher_query: str, parameters: str = "{}") -> str:
     Returns:
         JSON-encoded list of result records.
     """
-    cfg = get_neo4j_config()
     params: dict[str, Any] = json.loads(parameters)
-    driver = _get_driver()
-    try:
-        with driver.session(database=cfg.get("database", "neo4j")) as session:
-            result = session.run(cypher_query, params)
-            records = [dict(record) for record in result]
-            return json.dumps(records, default=str)
-    finally:
-        driver.close()
+    records = _neo4j_http_query(cypher_query, params)
+    return json.dumps(records, default=str)
 
 
 def find_skill(identifier: str) -> str:

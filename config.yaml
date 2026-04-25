@@ -1,6 +1,6 @@
 model:
   agent:
-    id: "openai/gemma-4-31b-it"
+    id: "${LLM_MODEL_ID:-openai/gemma-4-31b-it}"
     api_base: "${LLM_API_BASE:-http://gemma-4-31b-it-predictor.gemma4-31b.svc.cluster.local:8080/v1}"
     api_key: "${LLAMASTACK_API_KEY}"
   embedding:
