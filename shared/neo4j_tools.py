@@ -45,7 +45,13 @@ def _neo4j_http_query(cypher: str, params: dict[str, Any] | None = None) -> list
             "Authorization": f"Basic {creds}",
         },
     )
-    resp = urllib.request.urlopen(req, timeout=30)
+    try:
+        resp = urllib.request.urlopen(req, timeout=30)
+    except urllib.error.HTTPError as e:
+        body = e.read().decode()[:500] if e.fp else ""
+        raise RuntimeError(
+            f"Neo4j HTTP {e.code}: {body}"
+        ) from e
     data = json.loads(resp.read().decode())
     if data.get("errors"):
         raise RuntimeError(
