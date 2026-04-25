@@ -135,29 +135,38 @@ def main():
             if idx % 200 == 0 and idx > 0:
                 print(f"  [{idx}/{len(skills_list)}] SIMILAR_TO edges created: {similar_count}")
 
-            result = session.run(
-                "CALL db.index.vector.queryNodes('skill_embedding_idx', $top_k, $embedding) "
-                "YIELD node, score "
-                "WHERE elementId(node) <> $self_eid AND score >= $threshold "
-                "RETURN elementId(node) AS eid, score",
-                top_k=SIMILAR_TOP_K + 1,
-                embedding=skill["embedding"],
-                self_eid=skill["eid"],
-                threshold=SIMILAR_THRESHOLD,
-            )
-            neighbors = [dict(r) for r in result]
+            try:
+                result = session.run(
+                    "CALL db.index.vector.queryNodes('skill_embedding_idx', $top_k, $embedding) "
+                    "YIELD node, score "
+                    "WHERE elementId(node) <> $self_eid AND score >= $threshold "
+                    "RETURN elementId(node) AS eid, score",
+                    top_k=SIMILAR_TOP_K + 1,
+                    embedding=skill["embedding"],
+                    self_eid=skill["eid"],
+                    threshold=SIMILAR_THRESHOLD,
+                )
+                neighbors = [dict(r) for r in result]
+            except Exception:
+                continue
 
             for neighbor in neighbors:
-                session.run(
-                    "MATCH (a:Skill) WHERE elementId(a) = $a_eid "
-                    "MATCH (b:Skill) WHERE elementId(b) = $b_eid "
-                    "MERGE (a)-[r:SIMILAR_TO]-(b) "
-                    "SET r.score = $score",
-                    a_eid=skill["eid"],
-                    b_eid=neighbor["eid"],
-                    score=neighbor["score"],
-                )
-                similar_count += 1
+                for attempt in range(3):
+                    try:
+                        session.run(
+                            "MATCH (a:Skill) WHERE elementId(a) = $a_eid "
+                            "MATCH (b:Skill) WHERE elementId(b) = $b_eid "
+                            "MERGE (a)-[r:SIMILAR_TO]-(b) "
+                            "SET r.score = $score",
+                            a_eid=skill["eid"],
+                            b_eid=neighbor["eid"],
+                            score=neighbor["score"],
+                        )
+                        similar_count += 1
+                        break
+                    except Exception:
+                        if attempt < 2:
+                            time.sleep(1)
 
         print(f"  Created {similar_count} SIMILAR_TO edges")
 

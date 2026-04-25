@@ -48,48 +48,53 @@ def _list_imagestreams(oc_token: str, namespace: str) -> list[str]:
     return [n for n in names if n.startswith("skill-")]
 
 
-def _pull_skill_artifact(registry_url: str, namespace: str, skill_name: str, tag: str, oc_token: str) -> dict | None:
+def _pull_skill_artifact(registry_url: str, namespace: str, skill_name: str, tag: str, oc_token: str, max_retries: int = 3) -> dict | None:
     """Pull and extract SKILL.md + skill.yaml from an OCI skill artifact."""
+    import time as _time
+
     session = requests.Session()
     session.verify = False
     headers = {"Authorization": f"Bearer {oc_token}"}
 
-    manifest_url = f"{registry_url}/v2/{namespace}/{skill_name}/manifests/{tag}"
-    resp = session.get(
-        manifest_url,
-        headers={**headers, "Accept": "application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json"},
-        timeout=15,
-    )
-    if resp.status_code != 200:
-        return None
+    for attempt in range(max_retries):
+        try:
+            manifest_url = f"{registry_url}/v2/{namespace}/{skill_name}/manifests/{tag}"
+            resp = session.get(
+                manifest_url,
+                headers={**headers, "Accept": "application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json"},
+                timeout=15,
+            )
+            if resp.status_code != 200:
+                return None
 
-    manifest = resp.json()
-    layers = manifest.get("layers", [])
-    if not layers:
-        return None
+            manifest = resp.json()
+            layers = manifest.get("layers", [])
+            if not layers:
+                return None
 
-    layer_digest = layers[0]["digest"]
-    blob_url = f"{registry_url}/v2/{namespace}/{skill_name}/blobs/{layer_digest}"
-    blob_resp = session.get(blob_url, headers=headers, timeout=30, allow_redirects=True)
-    if blob_resp.status_code != 200 or len(blob_resp.content) == 0:
-        return None
+            layer_digest = layers[0]["digest"]
+            blob_url = f"{registry_url}/v2/{namespace}/{skill_name}/blobs/{layer_digest}"
+            blob_resp = session.get(blob_url, headers=headers, timeout=30, allow_redirects=True)
+            if blob_resp.status_code != 200 or len(blob_resp.content) == 0:
+                return None
 
-    result = {}
-    try:
-        with tarfile.open(fileobj=io.BytesIO(blob_resp.content), mode="r:gz") as tf:
-            for member in tf.getmembers():
-                if member.name.endswith("SKILL.md"):
-                    f = tf.extractfile(member)
-                    if f:
-                        result["skill_md"] = f.read().decode("utf-8", errors="replace")
-                elif member.name.endswith("skill.yaml"):
-                    f = tf.extractfile(member)
-                    if f:
-                        result["skill_yaml"] = yaml.safe_load(f.read())
-    except (tarfile.TarError, gzip.BadGzipFile):
-        return None
-
-    return result if result else None
+            result = {}
+            with tarfile.open(fileobj=io.BytesIO(blob_resp.content), mode="r:gz") as tf:
+                for member in tf.getmembers():
+                    if member.name.endswith("SKILL.md"):
+                        f = tf.extractfile(member)
+                        if f:
+                            result["skill_md"] = f.read().decode("utf-8", errors="replace")
+                    elif member.name.endswith("skill.yaml"):
+                        f = tf.extractfile(member)
+                        if f:
+                            result["skill_yaml"] = yaml.safe_load(f.read())
+            return result if result else None
+        except (requests.ConnectionError, requests.Timeout, tarfile.TarError, gzip.BadGzipFile) as e:
+            if attempt < max_retries - 1:
+                _time.sleep(2 ** attempt)
+                continue
+            return None
 
 
 def _parse_frontmatter(skill_md: str) -> dict:
@@ -200,7 +205,11 @@ def main():
         if i % 100 == 0:
             print(f"  [{i}/{len(imagestreams)}] synced={synced} failed={failed}")
 
-        artifact = _pull_skill_artifact(registry_url, namespace, is_name, "1.0.0", oc_token)
+        try:
+            artifact = _pull_skill_artifact(registry_url, namespace, is_name, "1.0.0", oc_token)
+        except Exception as e:
+            failed += 1
+            continue
         if not artifact:
             failed += 1
             continue
