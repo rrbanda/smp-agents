@@ -11,6 +11,19 @@ import requests
 from starlette.testclient import TestClient
 
 # ---------------------------------------------------------------------------
+# Marker registration
+# ---------------------------------------------------------------------------
+
+
+def pytest_configure(config):
+    config.addinivalue_line("markers", "unit: unit tests (no network)")
+    config.addinivalue_line("markers", "integration: integration tests (need LLM/Neo4j)")
+    config.addinivalue_line("markers", "e2e: end-to-end tests (need deployed agents)")
+    config.addinivalue_line("markers", "eval: ADK agent eval tests")
+    config.addinivalue_line("markers", "skill_eval: agentskills.io skill eval tests")
+
+
+# ---------------------------------------------------------------------------
 # Marker auto-application: tag every test file by its prefix
 # ---------------------------------------------------------------------------
 
@@ -24,6 +37,8 @@ def pytest_collection_modifyitems(items):
             item.add_marker(pytest.mark.e2e)
         elif "test_agent_evals" in path:
             item.add_marker(pytest.mark.eval)
+        elif "test_skill_evals" in path and "TestSkillEvalExecution" in item.nodeid:
+            item.add_marker(pytest.mark.skill_eval)
         else:
             item.add_marker(pytest.mark.unit)
 

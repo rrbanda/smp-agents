@@ -1,0 +1,39 @@
+{
+  "skill_name": "bundle-validator",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Validate my bundle: deploy-to-k8s, helm-chart-review, api-security-review.",
+      "expected_output": "A JSON array of findings categorized by severity (error, warning, info) covering dependency completeness, redundancy, and tool coverage.",
+      "assertions": [
+        "The output is valid JSON containing an array of finding objects",
+        "Each finding includes severity, title, detail, and affected_skills fields",
+        "Severity values are one of: error, warning, info",
+        "Missing dependencies are flagged as error severity",
+        "The analysis checks DEPENDS_ON relationships for completeness"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Check if document-reviewer and code-review are redundant in my bundle.",
+      "expected_output": "An analysis of the SIMILAR_TO score between the two skills, flagging potential redundancy if similarity exceeds 0.85.",
+      "assertions": [
+        "The response includes a similarity score or assessment between the two skills",
+        "Redundancy is flagged as warning severity if similarity is high",
+        "The finding explains why the skills may or may not be redundant",
+        "The affected_skills array includes both skill names"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "I have a bundle with just one skill: deploy-to-k8s. What am I missing?",
+      "expected_output": "Findings that identify missing dependencies and capability gaps for a single-skill bundle.",
+      "assertions": [
+        "Missing dependencies of deploy-to-k8s are flagged as errors",
+        "Capability gaps or missing complementary skills are identified",
+        "The response uses get_skill_dependencies to check the dependency tree",
+        "At least one finding has error severity for missing dependencies"
+      ]
+    }
+  ]
+}

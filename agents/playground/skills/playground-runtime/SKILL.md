@@ -1,6 +1,11 @@
 ---
 name: playground-runtime
 description: Provides methodology for testing skills interactively. Reads the active skill specification from session state and uses it as operating context to respond to user messages.
+compatibility: Requires session state management for active skill injection.
+metadata:
+  author: skills-marketplace
+  version: "1.0"
+  tags: testing, playground, skill-embodiment
 ---
 
 # Playground Runtime Instructions

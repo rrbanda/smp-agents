@@ -1,6 +1,11 @@
 ---
 name: kg-qa
 description: Answers natural-language questions about the skill ecosystem by translating them into Cypher queries against the Neo4j knowledge graph. Returns grounded answers with node references for graph highlighting.
+compatibility: Requires Neo4j graph database with Cypher query support.
+metadata:
+  author: skills-marketplace
+  version: "1.0"
+  tags: knowledge-graph, cypher, question-answering
 ---
 
 # Knowledge Graph Q&A Instructions

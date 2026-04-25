@@ -2,6 +2,181 @@
 
 Five specialized AI agents that power skill discovery, recommendation, validation, testing, and authoring for AI skill ecosystems. Built on agentic graph RAG with a Neo4j knowledge graph, vector embeddings, and a Skill Catalog API -- all exposed as A2A-compliant microservices deployable to Kubernetes via [Kagenti](https://github.com/kagenti/kagenti).
 
+Built on the [agentskills.io](https://agentskills.io) open standard (spec v1.0.0) -- the same skill format supported by Cursor, Claude Code, GitHub Copilot, VS Code, Gemini CLI, OpenAI Codex, and 30+ other agent platforms.
+
+## agentskills.io Conformance
+
+Every skill in this project follows the [agentskills.io specification](https://agentskills.io/specification):
+
+| Spec Requirement | Status | Implementation |
+|-----------------|--------|----------------|
+| `SKILL.md` with YAML frontmatter | Compliant | All 4 file-based skills + Skill Builder generates spec-compliant output |
+| `name` field (lowercase, hyphens, 1-64 chars) | Compliant | `skill-advisor`, `kg-qa`, `bundle-validator`, `playground-runtime` |
+| `description` field (1-1024 chars) | Compliant | Each describes what the skill does and when to use it |
+| `compatibility` field | Compliant | All skills declare environment requirements |
+| `metadata` (author, version, tags) | Compliant | All skills include author, version, and tags |
+| Directory name matches `name` field | Compliant | e.g. `skills/skill-advisor/SKILL.md` has `name: skill-advisor` |
+| `references/` for L3 deep-dive docs | Compliant | 6 reference files across 4 skills |
+| Progressive disclosure (L1/L2/L3) | Compliant | SkillToolset auto-handles: `list_skills` (L1), `load_skill` (L2), `load_skill_resource` (L3) |
+| Instructions < 500 lines | Compliant | All SKILL.md files are 30-50 lines |
+| `evals/evals.json` for skill evals | Compliant | All 4 skills include `evals/evals.json` with prompts, expected outputs, and assertions |
+| Skill Builder generates evals | Compliant | New skills are generated with `evals/evals.json` stubs |
+
+### Skill Directory Layout
+
+```
+agents/skill_advisor/skills/skill-advisor/     # agentskills.io v1.0.0 compliant
+├── SKILL.md                                    # name, description, compatibility, metadata
+├── evals/
+│   └── evals.json                              # 3 test cases with assertions
+└── references/
+    └── recommendation-strategy.md              # L3 scoring methodology
+
+agents/kg_qa/skills/kg-qa/                     # agentskills.io v1.0.0 compliant
+├── SKILL.md
+├── evals/
+│   └── evals.json                              # 3 test cases with assertions
+└── references/
+    ├── graph-schema.md                         # L3 node/edge schema
+    └── cypher-patterns.md                      # L3 reusable query templates
+
+agents/bundle_validator/skills/bundle-validator/ # agentskills.io v1.0.0 compliant
+├── SKILL.md
+├── evals/
+│   └── evals.json                              # 3 test cases with assertions
+└── references/
+    ├── validation-rules.md                     # L3 validation criteria
+    └── dependency-patterns.md                  # L3 anti-pattern definitions
+
+agents/playground/skills/playground-runtime/    # agentskills.io v1.0.0 compliant
+├── SKILL.md
+├── evals/
+│   └── evals.json                              # 3 test cases with assertions
+└── references/
+    └── testing-guide.md                        # L3 skill testing methodology
+```
+
+### Skill Builder Output
+
+The Skill Builder agent (Pattern 4: Meta Skill Factory) generates new skills that conform to the agentskills.io spec. Its L3 resources embed the full specification:
+
+- `skill-spec.md` -- the agentskills.io format reference
+- `skill-example.md` -- a working code-review skill example
+- `oci-publish-guide.md` -- OCI registry publishing workflow with `org.agentskills.*` annotations
+
+### Skill Evals (agentskills.io Format)
+
+Every skill includes `evals/evals.json` per the [agentskills.io eval spec](https://agentskills.io/skill-creation/evaluating-skills). These are **runnable** -- not just declarations:
+
+```json
+{
+  "skill_name": "skill-advisor",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Recommend skills for building containerized microservices on Kubernetes.",
+      "expected_output": "A ranked JSON array of skill recommendations with scores...",
+      "assertions": [
+        "The output is valid JSON containing an array of objects",
+        "Each recommendation includes a skill_name, score, and reason",
+        "Scores are numeric values between 0 and 1"
+      ]
+    }
+  ]
+}
+```
+
+12 skill-level eval cases across 4 skills, with 46 assertions total.
+
+#### Running Skill Evals
+
+The runner implements the full agentskills.io eval workflow -- each prompt is run **twice**: once with the skill (agent with SKILL.md loaded) and once without (raw LLM, no skill instructions). This proves the SKILL.md actually improves output quality.
+
+```bash
+# Full eval: with_skill + without_skill baseline
+python scripts/run_skill_evals.py
+
+# Specific agent
+python scripts/run_skill_evals.py --agent skill_advisor
+
+# Skip baseline (faster, just test with_skill)
+python scripts/run_skill_evals.py --skip-baseline
+
+# Save agentskills.io workspace structure
+python scripts/run_skill_evals.py --output-dir ./skill-advisor-workspace --iteration 1
+```
+
+The output directory follows the agentskills.io workspace structure:
+
+```
+skill-advisor-workspace/
+└── iteration-1/
+    ├── eval-1/
+    │   ├── with_skill/
+    │   │   ├── grading.json    # Per-assertion pass/fail with evidence
+    │   │   └── timing.json     # Duration, response length
+    │   └── without_skill/
+    │       ├── grading.json
+    │       └── timing.json
+    ├── eval-2/
+    │   ├── with_skill/...
+    │   └── without_skill/...
+    └── benchmark.json          # Aggregate: with_skill vs without_skill delta
+```
+
+Example `benchmark.json`:
+```json
+{
+  "run_summary": {
+    "with_skill": { "pass_rate": 0.83, "assertions": { "total": 12, "passed": 10 } },
+    "without_skill": { "pass_rate": 0.33, "assertions": { "total": 12, "passed": 4 } },
+    "delta": { "pass_rate": 0.50 }
+  }
+}
+```
+
+Example console output:
+```
+=================================================================
+  Skill: skill-advisor  [PASS]
+=================================================================
+  WITH skill:    10/12 assertions (83%) | 4520ms avg
+  WITHOUT skill:  4/12 assertions (33%) | 1200ms avg
+  DELTA:         +50% pass rate | +3320ms time
+
+  [PASS] Eval 1: Recommend skills for building and deploying containerized...
+        with_skill: 4/5 assertions
+        without:    1/5 assertions
+        [+] The output is valid JSON containing an array of objects
+        [+] Each recommendation includes a skill_name, score, and reason
+```
+
+#### Data Integrity Tests (CI)
+
+The `TestSkillEvalDataIntegrity` suite (25 tests) validates all `evals/evals.json` files without network:
+
+```bash
+pytest tests/test_skill_evals.py::TestSkillEvalDataIntegrity -v
+```
+
+Checks: file existence, JSON structure, required fields, assertion quality, skill name matching, unique IDs, and total assertion coverage (46+ across all skills).
+
+### Agent-Level Evals (ADK Format)
+
+In addition to skill evals, this project uses ADK-native evaluations (`.test.json`) that test agent behavior -- tool selection, conversation flow, and response correctness:
+
+| Aspect | agentskills.io Skill Evals | ADK Agent Evals |
+|--------|---------------------------|-----------------|
+| Scope | Skill output quality | Agent tool orchestration |
+| Format | `skills/*/evals/evals.json` | `agents/*/evals/*.test.json` |
+| Runner | `scripts/run_skill_evals.py` | `pytest -m eval` |
+| Grading | LLM-as-judge + heuristic | Expected tool call matching |
+| Output | `grading.json` + `benchmark.json` | JUnit XML |
+| CI Job | `skill-evals` | `agent-evals` |
+| Test count | 12 cases, 46 assertions | 23 cases across 5 agents |
+
+Both layers are complementary. Skill evals verify the skill instructions produce good output (per the agentskills.io standard), while ADK evals verify the agents correctly orchestrate tools in response to user queries.
+
 ## Why Agentic Graph RAG for Skills?
 
 AI skills are not isolated artifacts. A Kubernetes deployment skill _depends on_ container building, _complements_ CI/CD pipelines, and _is an alternative to_ serverless deploy. These relationships form a rich knowledge graph that naive keyword search cannot navigate.

@@ -1,0 +1,38 @@
+{
+  "skill_name": "skill-advisor",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Recommend skills for building and deploying containerized microservices on Kubernetes.",
+      "expected_output": "A ranked JSON array of skill recommendations with scores and explanations referencing graph relationships like DEPENDS_ON or COMPLEMENTS.",
+      "assertions": [
+        "The output is valid JSON containing an array of objects",
+        "Each recommendation includes a skill_name, score, and reason",
+        "At least one recommendation references Kubernetes or container-related skills",
+        "Scores are numeric values between 0 and 1",
+        "Reasons reference specific graph relationships or semantic similarity"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "I already have deploy-to-k8s in my cart. What else do I need for a complete DevOps pipeline?",
+      "expected_output": "Recommendations that complement deploy-to-k8s, covering CI/CD, monitoring, and security gaps. Should not recommend deploy-to-k8s itself.",
+      "assertions": [
+        "deploy-to-k8s is not in the recommended skills list",
+        "Recommendations cover complementary capabilities like CI/CD, monitoring, or security",
+        "Each recommendation explains why it complements the existing cart",
+        "The output mentions the COMPLEMENTS or DEPENDS_ON relationship type"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Find skills similar to document-reviewer but for technical writing.",
+      "expected_output": "Skills semantically related to document review but focused on technical writing, with similarity scores.",
+      "assertions": [
+        "At least one recommendation is semantically related to document review or writing",
+        "The response distinguishes between the original skill and the alternatives",
+        "Similarity scores or reasons reference the SIMILAR_TO relationship"
+      ]
+    }
+  ]
+}

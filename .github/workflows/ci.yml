@@ -113,6 +113,58 @@ jobs:
           name: eval-results
           path: test-results/evals.xml
 
+  skill-evals:
+    name: Skill Evals (agentskills.io)
+    needs: unit-tests
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    continue-on-error: true
+    timeout-minutes: 30
+    env:
+      NEO4J_URI: ${{ secrets.NEO4J_URI }}
+      NEO4J_HTTP_URL: ${{ secrets.NEO4J_HTTP_URL }}
+      NEO4J_PASSWORD: ${{ secrets.NEO4J_PASSWORD }}
+      LLM_API_BASE: ${{ secrets.LLM_API_BASE }}
+      LLM_MODEL_ID: ${{ secrets.LLM_MODEL_ID }}
+      EMBEDDING_API_BASE: ${{ secrets.EMBEDDING_API_BASE }}
+      LLAMASTACK_API_KEY: ${{ secrets.LLAMASTACK_API_KEY }}
+      SKILL_CATALOG_URL: ${{ secrets.SKILL_CATALOG_URL }}
+      E2E_BASE_URL: ${{ secrets.E2E_BASE_URL }}
+    steps:
+      - name: Check required secrets
+        run: |
+          if [ -z "$E2E_BASE_URL" ] || [ -z "$LLM_API_BASE" ]; then
+            echo "::warning::Skipping skill evals — E2E_BASE_URL or LLM_API_BASE secrets not configured."
+            echo "SKIP_SKILL_EVALS=true" >> "$GITHUB_ENV"
+          fi
+
+      - uses: actions/checkout@v4
+        if: env.SKIP_SKILL_EVALS != 'true'
+
+      - uses: actions/setup-python@v5
+        if: env.SKIP_SKILL_EVALS != 'true'
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        if: env.SKIP_SKILL_EVALS != 'true'
+        run: |
+          pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run agentskills.io skill evals (with vs without skill)
+        if: env.SKIP_SKILL_EVALS != 'true'
+        run: |
+          python scripts/run_skill_evals.py --output-dir eval-results --iteration 1
+        timeout-minutes: 20
+
+      - name: Upload skill eval results
+        if: always() && env.SKIP_SKILL_EVALS != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: skill-eval-results
+          path: eval-results/
+
   container-build:
     name: Build Container (${{ matrix.agent }})
     needs: unit-tests

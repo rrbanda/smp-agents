@@ -1,0 +1,36 @@
+{
+  "skill_name": "playground-runtime",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Review this Python function for security issues:\n\ndef login(user, password):\n    query = f\"SELECT * FROM users WHERE name='{user}' AND pass='{password}'\"\n    return db.execute(query)",
+      "expected_output": "When operating as a code-review skill, the playground should identify the SQL injection vulnerability and recommend parameterized queries.",
+      "assertions": [
+        "The response identifies the SQL injection vulnerability",
+        "A fix using parameterized queries is recommended",
+        "The response stays within the scope of the active skill",
+        "The response includes the skill_name tag in the output"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "What is the capital of France?",
+      "expected_output": "The playground should recognize this is outside the active skill's scope and say so explicitly, rather than answering the trivia question.",
+      "assertions": [
+        "The response acknowledges the question is outside the active skill's scope",
+        "The response does not simply answer the trivia question as if it were a general assistant",
+        "The skill_name tag is included in the output"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Switch to the deploy-to-k8s skill and then help me write a Kubernetes manifest.",
+      "expected_output": "The playground acknowledges the skill switch and responds in the context of the new skill.",
+      "assertions": [
+        "The response acknowledges the skill transition",
+        "Subsequent guidance is specific to Kubernetes deployment",
+        "The skill_name tag reflects the newly active skill"
+      ]
+    }
+  ]
+}

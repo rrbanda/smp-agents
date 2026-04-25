@@ -1,6 +1,11 @@
 ---
 name: bundle-validator
 description: Validates a curated skill bundle for missing dependencies, redundant skills, capability gaps, and tool coverage. Returns categorized findings as error, warning, or info.
+compatibility: Requires Neo4j graph database for dependency and similarity lookups.
+metadata:
+  author: skills-marketplace
+  version: "1.0"
+  tags: validation, dependency-check, quality-assurance
 ---
 
 # Bundle Validator Instructions

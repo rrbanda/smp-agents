@@ -1,0 +1,37 @@
+{
+  "skill_name": "kg-qa",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "How many skills are in the DevOps domain?",
+      "expected_output": "A specific count of skills in the DevOps domain with the Cypher query used, citing actual data from the knowledge graph.",
+      "assertions": [
+        "The answer includes a specific numeric count",
+        "The response includes the Cypher query used to retrieve the data",
+        "The answer does not hallucinate skill names not in the graph",
+        "The output includes highlighted_nodes for UI graph visualization"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "What is the relationship between deploy-to-k8s and helm-chart-review?",
+      "expected_output": "A description of the graph path between the two skills including relationship types like DEPENDS_ON or COMPLEMENTS.",
+      "assertions": [
+        "The response identifies the specific relationship type between the two skills",
+        "Both skill names appear in the highlighted_nodes array",
+        "The Cypher query targets a path or relationship pattern between the two nodes",
+        "The answer is grounded in graph data, not fabricated"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Which skills have no dependencies?",
+      "expected_output": "A list of skills that have zero outgoing DEPENDS_ON relationships, with a query that filters for isolated nodes.",
+      "assertions": [
+        "The Cypher query uses a NOT pattern or count filter for DEPENDS_ON relationships",
+        "The response lists specific skill names from the graph",
+        "The answer explicitly states it is based on graph traversal results"
+      ]
+    }
+  ]
+}

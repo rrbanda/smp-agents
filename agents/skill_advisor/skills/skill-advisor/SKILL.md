@@ -1,6 +1,11 @@
 ---
 name: skill-advisor
 description: Recommends complementary skills from the catalog based on user requirements, current cart contents, semantic similarity, and knowledge graph relationships. Returns ranked suggestions with explanations.
+compatibility: Requires Neo4j graph database and embedding endpoint for semantic search.
+metadata:
+  author: skills-marketplace
+  version: "1.0"
+  tags: recommendation, graph-rag, semantic-search
 ---
 
 # Skill Advisor Instructions

@@ -16,46 +16,74 @@ from shared.oci_tools import publish_skill_to_oci, validate_skill_yaml
 _cfg = get_agent_config("skill_builder")
 
 _SPEC_CONTENT = """\
-# agentskills.io Specification Format
+# agentskills.io Specification (v1.0.0)
 
-A skill is a Markdown file (`SKILL.md`) with YAML frontmatter. The structure is:
+A skill is a directory containing a `SKILL.md` file with YAML frontmatter
+followed by Markdown instructions.
 
 ```markdown
 ---
 name: my-skill-name
-description: A brief description of what this skill does (max 1000 characters).
+description: What this skill does and when to use it (max 1024 characters).
+license: Apache-2.0
+compatibility: Requires Python 3.10+ and docker
+metadata:
+  author: example-org
+  version: "1.0"
+allowed-tools: Bash(git:*) Read
 ---
 
 # Instructions
 
-The body contains step-by-step instructions for how an LLM should behave
-when this skill is loaded into its context.
+Step-by-step instructions for how an agent should behave when this skill
+is loaded into its context.
 ```
 
 ## Frontmatter Fields
 
-| Field | Required | Type | Constraints |
-|-------|----------|------|-------------|
-| name | Yes | string | Must be kebab-case (lowercase, hyphens only). Must match the directory name. |
-| description | Yes | string | Max 1024 characters. Should be a single sentence. |
+| Field | Required | Constraints |
+|-------|----------|-------------|
+| name | Yes | 1-64 chars, lowercase + hyphens, must match dir name |
+| description | Yes | 1-1024 chars, what it does AND when to use it |
+| license | No | License name or path to bundled license file |
+| compatibility | No | 1-500 chars, environment requirements |
+| metadata | No | Key-value map (author, version, tags) |
+| allowed-tools | No | Space-separated pre-approved tools (experimental) |
 
 ## Directory Structure
 
 ```
 my-skill-name/
-├── SKILL.md          # Required: the skill definition
+├── SKILL.md          # Required: metadata + instructions
+├── evals/            # Optional: skill quality evaluations
+│   └── evals.json    # Test cases with prompts, expected outputs, assertions
 ├── references/       # Optional: L3 deep-dive resources
 │   ├── guide.md
 │   └── patterns.md
-├── assets/           # Optional: static files
-└── scripts/          # Optional: executable scripts
+├── scripts/          # Optional: executable code
+└── assets/           # Optional: templates, static resources
 ```
 
-## Naming Conventions
+## Skill Evals (evals/evals.json)
 
-- Skill names: `kebab-case` (e.g., `deploy-to-k8s`, `api-security-review`)
-- Reference files: `kebab-case.md`
-- Tags: lowercase, single words or hyphenated
+Include test cases to verify skill output quality:
+
+```json
+{
+  "skill_name": "my-skill-name",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "A realistic user message.",
+      "expected_output": "Description of what success looks like.",
+      "assertions": [
+        "The output includes a structured JSON response",
+        "All required fields are present"
+      ]
+    }
+  ]
+}
+```
 
 ## Instruction Body Best Practices
 
@@ -64,6 +92,7 @@ my-skill-name/
 3. Define clear input/output formats
 4. Specify error handling behavior
 5. Include scope boundaries (what the skill does and does NOT do)
+6. Keep SKILL.md under 500 lines; move details to references/
 """
 
 _EXAMPLE_CONTENT = """\
@@ -165,9 +194,10 @@ _skill_creator = models.Skill(
     frontmatter=models.Frontmatter(
         name="skill-creator",
         description=(
-            "Creates new ADK-compatible skill definitions from requirements. "
-            "Generates complete SKILL.md files following the agentskills.io "
-            "specification. Supports multi-turn refinement and OCI publishing."
+            "Creates new skill definitions from requirements. "
+            "Generates complete SKILL.md files and evals/evals.json following "
+            "the agentskills.io v1.0.0 specification. Supports multi-turn "
+            "refinement and OCI publishing."
         ),
     ),
     instructions=(
@@ -180,13 +210,17 @@ _skill_creator = models.Skill(
         "3. Instructions should be clear, step-by-step\n"
         "4. Reference files in references/ for detailed domain knowledge\n"
         "5. Keep SKILL.md under 500 lines, put details in references/\n"
-        "6. Output the complete file content the user can save directly\n\n"
+        "6. Output the complete file content the user can save directly\n"
+        "7. Include optional metadata fields (author, version) when relevant\n"
+        "8. Generate an evals/evals.json file with 2-3 test cases per the "
+        "agentskills.io eval spec (prompt, expected_output, assertions)\n\n"
         "Workflow:\n"
         "1. Gather requirements from the user (purpose, tools, domain)\n"
-        "2. Generate the specification\n"
-        "3. Present for review, support multi-turn refinement\n"
-        "4. On approval, validate via validate_skill_yaml\n"
-        "5. Read `references/oci-publish-guide.md` then publish via publish_skill_to_oci\n"
+        "2. Generate the SKILL.md specification\n"
+        "3. Generate evals/evals.json with realistic test cases\n"
+        "4. Present for review, support multi-turn refinement\n"
+        "5. On approval, validate via validate_skill_yaml\n"
+        "6. Read `references/oci-publish-guide.md` then publish via publish_skill_to_oci\n"
     ),
     resources=models.Resources(
         references={
@@ -206,17 +240,20 @@ root_agent = Agent(
     instruction=(
         "You are a Skill Builder agent for the Skills Marketplace.\n\n"
         "Your job is to generate new skill specifications from user descriptions "
-        "following the agentskills.io specification. You are a meta-skill: "
+        "following the agentskills.io specification (v1.0.0). You are a meta-skill: "
         "a skill whose purpose is to create other skills.\n\n"
         "1. Load the skill-creator skill for your authoring methodology\n"
         "2. Use load_skill_resource to read the spec and example references\n"
         "3. Generate a complete specification (name, description, instructions)\n"
-        "4. Present for review and support multi-turn refinement\n"
-        "5. On approval, validate via validate_skill_yaml then publish via "
+        "4. Generate evals/evals.json with 2-3 test cases (prompt, expected_output, "
+        "assertions) per the agentskills.io eval standard\n"
+        "5. Present for review and support multi-turn refinement\n"
+        "6. On approval, validate via validate_skill_yaml then publish via "
         "publish_skill_to_oci\n"
-        "6. After publishing, call trigger_catalog_sync so the new skill "
+        "7. After publishing, call trigger_catalog_sync so the new skill "
         "appears in the catalog immediately\n\n"
-        "Always output complete, valid SKILL.md content the user can save directly."
+        "Always output complete, valid SKILL.md content and evals/evals.json "
+        "the user can save directly."
     ),
     tools=[
         _skill_toolset,
