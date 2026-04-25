@@ -394,15 +394,72 @@ PYTHONPATH=. uvicorn agents.skill_builder.server:app --host 0.0.0.0 --port 8005
 curl http://localhost:8001/.well-known/agent-card.json | jq .name
 ```
 
-### Kagenti Deployment
+### GitOps Deployment (Kagenti + ArgoCD)
 
-Each agent has its own Dockerfile. To deploy via Kagenti:
+The repo includes full Kustomize manifests and an ArgoCD Application for GitOps deployment to OpenShift with Kagenti.
 
-1. Push this repo to GitHub
-2. In Kagenti UI: **Import New Agent** > **Build from Source**
-3. Set repository URL, subfolder (e.g. `agents/skill_advisor`), protocol = **A2A**
-4. Kagenti builds the image via Shipwright, creates Deployment + Service + HTTPRoute
-5. Agent appears in the Kagenti Agent Catalog, discoverable via `/.well-known/agent-card.json`
+```mermaid
+graph LR
+    Push["git push main"] --> CI["CI: Lint + Test"]
+    CI --> Build["Build 5 images"]
+    Build --> GHCR["GHCR"]
+    Build --> CD["CD: Update tags"]
+    CD -->|"commit"| ArgoCD["ArgoCD"]
+    ArgoCD -->|"sync"| OCP["OpenShift"]
+    OCP --> Kagenti["Kagenti Operator"]
+    Kagenti --> Cards["AgentCard CRDs"]
+```
+
+**How it works:**
+
+1. Push to `main` triggers CI -- lint, unit tests, and container builds for all 5 agents
+2. CI pushes images to GHCR (`ghcr.io/rrbanda/smp-agents/<agent>:sha-<commit>`)
+3. CD workflow updates image tags in `k8s/overlays/dev/kustomization.yaml` and commits
+4. ArgoCD detects the commit and auto-syncs Deployments, Services, and Routes
+5. Kagenti operator sees `kagenti.io/type=agent` labels and auto-creates AgentCard CRDs
+6. Agents are discoverable via A2A protocol at `/.well-known/agent-card.json`
+
+```bash
+# One-time: apply the ArgoCD Application
+oc apply -f k8s/argocd/application.yaml
+
+# Verify sync status
+oc get application.argoproj.io smp-agents -n openshift-gitops
+
+# Check agent cards
+oc get agentcards -n smp-agents
+```
+
+**Kustomize structure:**
+
+```
+k8s/
+├── base/                          # Portable base manifests
+│   ├── kustomization.yaml
+│   ├── namespace.yaml
+│   ├── configmap.yaml             # smp-config (config.yaml for cluster)
+│   ├── secret.yaml                # smp-secrets (NEO4J_PASSWORD placeholder)
+│   └── <agent>/                   # Per-agent Deployment + Service (x5)
+├── overlays/
+│   └── dev/                       # Dev cluster overlay
+│       ├── kustomization.yaml     # Image tags (updated by CD workflow)
+│       ├── httproutes.yaml        # OpenShift Routes for external access
+│       └── patches/
+│           └── secret-override.yaml
+└── argocd/
+    └── application.yaml           # ArgoCD Application (auto-sync + self-heal)
+```
+
+Each Deployment includes liveness (`/healthz`) and readiness (`/readyz`) probes, resource limits, ConfigMap volume mount, and secret references.
+
+### Manual Kagenti Deployment
+
+Alternatively, deploy via the Kagenti API script:
+
+```bash
+# Requires: oc login, GitHub repo pushed
+./scripts/deploy_kagenti.sh
+```
 
 ## Configuration
 
@@ -459,19 +516,27 @@ pytest tests/ -m unit -v
 pytest tests/test_agent_evals.py -m eval -v
 ```
 
-### CI Pipeline (GitHub Actions)
+### CI/CD Pipeline (GitHub Actions)
 
 ```mermaid
 graph LR
     Lint["Lint & Type Check<br/>ruff + mypy"] --> UnitTests["Unit Tests<br/>101 tests"]
     UnitTests --> Evals["Agent Evals<br/>continue-on-error"]
     UnitTests --> Build["Container Build<br/>5 agents → GHCR"]
+    Build --> CD["CD: Update image tags<br/>in k8s/overlays/dev"]
+    CD --> ArgoCD["ArgoCD auto-sync<br/>to OpenShift"]
 ```
 
-- **Lint**: `ruff check`, `ruff format --check`, `mypy`
-- **Unit Tests**: All `pytest -m unit` tests
-- **Agent Evals**: Runs on push/dispatch only, skips gracefully if LLM secrets not configured
-- **Container Build**: Matrix build of 5 agent Dockerfiles, pushed to GHCR (main branch only)
+- **CI** (`.github/workflows/ci.yml`):
+  - **Lint**: `ruff check`, `ruff format --check`, `mypy`
+  - **Unit Tests**: All `pytest -m unit` tests
+  - **Agent Evals**: Runs on push/dispatch only, skips gracefully if LLM secrets not configured
+  - **Container Build**: Matrix build of 5 agent Dockerfiles, pushed to GHCR (main branch only)
+
+- **CD** (`.github/workflows/cd.yml`):
+  - Triggered after CI completes on main, or via `workflow_dispatch`
+  - Updates `newTag` in `k8s/overlays/dev/kustomization.yaml` to `sha-<commit>`
+  - Commits and pushes; ArgoCD detects and syncs to the cluster
 
 ## Project Structure
 
@@ -543,8 +608,14 @@ smp-agents/
 │   ├── test_integration_agents.py        # Live LLM + Neo4j integration
 │   └── test_model_config.py              # Config loader
 │
+├── k8s/                                  # GitOps manifests
+│   ├── base/                             # Kustomize base (Deployments, Services, ConfigMap)
+│   ├── overlays/dev/                     # Dev overlay (Routes, image tags, secrets)
+│   └── argocd/                           # ArgoCD Application (auto-sync)
+│
 ├── .github/workflows/
 │   ├── ci.yml                            # Lint → Unit → Evals → Container Build
+│   ├── cd.yml                            # Update image tags → ArgoCD sync
 │   └── e2e.yml                           # End-to-end tests on OpenShift
 │
 └── Dockerfile.*                          # Per-agent container builds

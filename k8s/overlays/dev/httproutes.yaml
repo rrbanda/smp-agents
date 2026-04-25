@@ -5,6 +5,8 @@ metadata:
   namespace: smp-agents
   labels:
     app.kubernetes.io/name: skill-advisor
+  annotations:
+    haproxy.router.openshift.io/timeout: 120s
 spec:
   host: skill-advisor-smp-agents.apps.ocp.v7hjl.sandbox2288.opentlc.com
   to:
@@ -23,6 +25,8 @@ metadata:
   namespace: smp-agents
   labels:
     app.kubernetes.io/name: bundle-validator
+  annotations:
+    haproxy.router.openshift.io/timeout: 120s
 spec:
   host: bundle-validator-smp-agents.apps.ocp.v7hjl.sandbox2288.opentlc.com
   to:
@@ -41,6 +45,8 @@ metadata:
   namespace: smp-agents
   labels:
     app.kubernetes.io/name: kg-qa
+  annotations:
+    haproxy.router.openshift.io/timeout: 120s
 spec:
   host: kg-qa-smp-agents.apps.ocp.v7hjl.sandbox2288.opentlc.com
   to:
@@ -59,6 +65,8 @@ metadata:
   namespace: smp-agents
   labels:
     app.kubernetes.io/name: playground
+  annotations:
+    haproxy.router.openshift.io/timeout: 120s
 spec:
   host: playground-smp-agents.apps.ocp.v7hjl.sandbox2288.opentlc.com
   to:
@@ -77,6 +85,8 @@ metadata:
   namespace: smp-agents
   labels:
     app.kubernetes.io/name: skill-builder
+  annotations:
+    haproxy.router.openshift.io/timeout: 120s
 spec:
   host: skill-builder-smp-agents.apps.ocp.v7hjl.sandbox2288.opentlc.com
   to:
