@@ -1,0 +1,70 @@
+model:
+  agent:
+    id: "openai/gemini/models/gemini-2.5-flash"
+    api_base: "${LLM_API_BASE:-https://llamastack-llamastack.apps.ocp.v7hjl.sandbox2288.opentlc.com/v1}"
+    api_key: "${LLAMASTACK_API_KEY}"
+  embedding:
+    id: "vllm-embedding/nomic-embed-text-v1-5"
+    dimension: 768
+    api_base: "${LLM_API_BASE:-https://llamastack-llamastack.apps.ocp.v7hjl.sandbox2288.opentlc.com/v1}"
+
+neo4j:
+  uri: "${NEO4J_URI:-bolt://neo4j.skills-marketplace.svc.cluster.local:7687}"
+  user: "${NEO4J_USER:-neo4j}"
+  password: "${NEO4J_PASSWORD}"
+  database: "neo4j"
+
+oci:
+  registry_url: "${OCI_REGISTRY_URL:-https://default-route-openshift-image-registry.apps.ocp.v7hjl.sandbox2288.opentlc.com}"
+  namespace: "team1"
+  cache_ttl_seconds: 300
+
+a2a:
+  provider:
+    organization: "Skills Marketplace"
+    url: "https://skills-marketplace.example.com"
+
+agents:
+  skill_advisor:
+    name: "skill_advisor"
+    description: "Recommends complementary skills based on user needs and current cart."
+    host: "0.0.0.0"
+    port: 8001
+    search_top_k: 10
+    a2a:
+      version: "0.1.0"
+
+  bundle_validator:
+    name: "bundle_validator"
+    description: "Validates skill bundles for completeness, redundancy, and dependency gaps."
+    host: "0.0.0.0"
+    port: 8002
+    a2a:
+      version: "0.1.0"
+
+  kg_qa:
+    name: "kg_qa"
+    description: "Answers natural-language questions grounded in the Neo4j skill graph."
+    host: "0.0.0.0"
+    port: 8003
+    a2a:
+      version: "0.1.0"
+
+  playground:
+    name: "playground"
+    description: "Tests individual skills interactively against a live agent."
+    host: "0.0.0.0"
+    port: 8004
+    state_keys:
+      active_skill_spec: "_active_skill_spec"
+      skill_catalog: "_skill_catalog"
+    a2a:
+      version: "0.1.0"
+
+  skill_builder:
+    name: "skill_builder"
+    description: "Generates new skill specifications from user descriptions and publishes to OCI."
+    host: "0.0.0.0"
+    port: 8005
+    a2a:
+      version: "0.1.0"

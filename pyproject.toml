@@ -1,0 +1,37 @@
+[project]
+name = "smp-agents"
+version = "0.1.0"
+description = "Skills Marketplace ADK agents: Skill Advisor, Bundle Validator, KG Q&A, Playground, and Skill Builder."
+readme = "README.md"
+license = {text = "Apache License 2.0"}
+requires-python = ">=3.11"
+
+dependencies = [
+    "google-adk[a2a]>=1.25.0,<2.0.0",
+    "litellm>=1.30.0",
+    "python-dotenv>=1.0.0,<2.0.0",
+    "neo4j>=5.0.0,<6.0.0",
+    "pyyaml>=6.0.0",
+    "requests>=2.31.0",
+]
+
+[dependency-groups]
+dev = [
+    "google-adk[eval]>=1.25.0",
+    "pytest-asyncio>=0.26.0",
+    "pytest>=8.3.5",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = [
+    "shared",
+    "agents/skill_advisor",
+    "agents/bundle_validator",
+    "agents/kg_qa",
+    "agents/playground",
+    "agents/skill_builder",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
