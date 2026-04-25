@@ -1,0 +1,67 @@
+name: CD
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Image tag to deploy (e.g. sha-abc1234 or latest)"
+        required: false
+        default: "latest"
+
+permissions:
+  contents: write
+  packages: read
+
+jobs:
+  update-manifests:
+    name: Update Image Tags
+    runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main')
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Determine image tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=${{ github.event.inputs.image_tag }}" >> "$GITHUB_OUTPUT"
+          else
+            SHA="${{ github.event.workflow_run.head_sha }}"
+            echo "tag=sha-${SHA}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Update kustomization image tags
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          KUSTOMIZATION="k8s/overlays/dev/kustomization.yaml"
+
+          echo "Updating image tags to: ${TAG}"
+
+          # Use sed to replace all newTag values
+          sed -i "s/newTag: .*/newTag: ${TAG}/" "${KUSTOMIZATION}"
+
+          echo "Updated ${KUSTOMIZATION}:"
+          cat "${KUSTOMIZATION}"
+
+      - name: Commit and push
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add k8s/overlays/dev/kustomization.yaml
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "chore(cd): update image tags to ${TAG}"
+            git push origin main
+          fi

@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: skill-advisor
+  namespace: smp-agents
+  labels:
+    app.kubernetes.io/name: skill-advisor
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8000
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: skill-advisor
+    kagenti.io/type: agent

@@ -1,0 +1,21 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+  - httproutes.yaml
+
+patches:
+  - path: patches/secret-override.yaml
+
+images:
+  - name: ghcr.io/rrbanda/smp-agents/skill-advisor
+    newTag: latest
+  - name: ghcr.io/rrbanda/smp-agents/bundle-validator
+    newTag: latest
+  - name: ghcr.io/rrbanda/smp-agents/kg-qa
+    newTag: latest
+  - name: ghcr.io/rrbanda/smp-agents/playground
+    newTag: latest
+  - name: ghcr.io/rrbanda/smp-agents/skill-builder
+    newTag: latest
