@@ -1,74 +1,89 @@
-apiVersion: gateway.networking.k8s.io/v1
-kind: HTTPRoute
+apiVersion: route.openshift.io/v1
+kind: Route
 metadata:
   name: skill-advisor
   namespace: smp-agents
   labels:
     app.kubernetes.io/name: skill-advisor
 spec:
-  hostnames:
-    - skill-advisor-smp-agents.apps.ocp.v7hjl.sandbox2288.opentlc.com
-  rules:
-    - backendRefs:
-        - name: skill-advisor
-          port: 8080
+  host: skill-advisor-smp-agents.apps.ocp.v7hjl.sandbox2288.opentlc.com
+  to:
+    kind: Service
+    name: skill-advisor
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
 ---
-apiVersion: gateway.networking.k8s.io/v1
-kind: HTTPRoute
+apiVersion: route.openshift.io/v1
+kind: Route
 metadata:
   name: bundle-validator
   namespace: smp-agents
   labels:
     app.kubernetes.io/name: bundle-validator
 spec:
-  hostnames:
-    - bundle-validator-smp-agents.apps.ocp.v7hjl.sandbox2288.opentlc.com
-  rules:
-    - backendRefs:
-        - name: bundle-validator
-          port: 8080
+  host: bundle-validator-smp-agents.apps.ocp.v7hjl.sandbox2288.opentlc.com
+  to:
+    kind: Service
+    name: bundle-validator
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
 ---
-apiVersion: gateway.networking.k8s.io/v1
-kind: HTTPRoute
+apiVersion: route.openshift.io/v1
+kind: Route
 metadata:
   name: kg-qa
   namespace: smp-agents
   labels:
     app.kubernetes.io/name: kg-qa
 spec:
-  hostnames:
-    - kg-qa-smp-agents.apps.ocp.v7hjl.sandbox2288.opentlc.com
-  rules:
-    - backendRefs:
-        - name: kg-qa
-          port: 8080
+  host: kg-qa-smp-agents.apps.ocp.v7hjl.sandbox2288.opentlc.com
+  to:
+    kind: Service
+    name: kg-qa
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
 ---
-apiVersion: gateway.networking.k8s.io/v1
-kind: HTTPRoute
+apiVersion: route.openshift.io/v1
+kind: Route
 metadata:
   name: playground
   namespace: smp-agents
   labels:
     app.kubernetes.io/name: playground
 spec:
-  hostnames:
-    - playground-smp-agents.apps.ocp.v7hjl.sandbox2288.opentlc.com
-  rules:
-    - backendRefs:
-        - name: playground
-          port: 8080
+  host: playground-smp-agents.apps.ocp.v7hjl.sandbox2288.opentlc.com
+  to:
+    kind: Service
+    name: playground
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
 ---
-apiVersion: gateway.networking.k8s.io/v1
-kind: HTTPRoute
+apiVersion: route.openshift.io/v1
+kind: Route
 metadata:
   name: skill-builder
   namespace: smp-agents
   labels:
     app.kubernetes.io/name: skill-builder
 spec:
-  hostnames:
-    - skill-builder-smp-agents.apps.ocp.v7hjl.sandbox2288.opentlc.com
-  rules:
-    - backendRefs:
-        - name: skill-builder
-          port: 8080
+  host: skill-builder-smp-agents.apps.ocp.v7hjl.sandbox2288.opentlc.com
+  to:
+    kind: Service
+    name: skill-builder
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
