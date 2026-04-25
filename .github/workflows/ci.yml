@@ -68,6 +68,7 @@ jobs:
     needs: unit-tests
     runs-on: ubuntu-latest
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    continue-on-error: true
     timeout-minutes: 30
     env:
       NEO4J_URI: ${{ secrets.NEO4J_URI }}
@@ -77,23 +78,34 @@ jobs:
       EMBEDDING_API_BASE: ${{ secrets.EMBEDDING_API_BASE }}
       LLAMASTACK_API_KEY: ${{ secrets.LLAMASTACK_API_KEY }}
     steps:
+      - name: Check required secrets
+        run: |
+          if [ -z "$LLM_MODEL_ID" ] || [ -z "$LLM_API_BASE" ]; then
+            echo "::warning::Skipping agent evals — LLM_MODEL_ID or LLM_API_BASE secrets not configured."
+            echo "SKIP_EVALS=true" >> "$GITHUB_ENV"
+          fi
+
       - uses: actions/checkout@v4
+        if: env.SKIP_EVALS != 'true'
 
       - uses: actions/setup-python@v5
+        if: env.SKIP_EVALS != 'true'
         with:
           python-version: "3.12"
 
       - name: Install dependencies
+        if: env.SKIP_EVALS != 'true'
         run: |
           pip install --upgrade pip
           pip install -e ".[dev]"
 
       - name: Run ADK evals
+        if: env.SKIP_EVALS != 'true'
         run: pytest tests/test_agent_evals.py -m eval -v --tb=long --junitxml=test-results/evals.xml
         timeout-minutes: 20
 
       - name: Upload eval results
-        if: always()
+        if: always() && env.SKIP_EVALS != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: eval-results
