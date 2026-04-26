@@ -97,9 +97,7 @@ class BenchmarkResult:
     delta_duration_ms: float = 0.0
 
 
-def _send_a2a_task(
-    base_url: str, message: str, timeout: int = 120
-) -> tuple[str, float]:
+def _send_a2a_task(base_url: str, message: str, timeout: int = 120) -> tuple[str, float]:
     """Send a prompt to an agent via A2A and return (response_text, duration_ms)."""
     payload = {
         "jsonrpc": "2.0",
@@ -223,9 +221,7 @@ def _grade_assertions_with_llm(
             parsed = json.loads(content[start:end])
             return [
                 AssertionResult(
-                    text=item.get(
-                        "text", assertions[i] if i < len(assertions) else ""
-                    ),
+                    text=item.get("text", assertions[i] if i < len(assertions) else ""),
                     passed=bool(item.get("passed", False)),
                     evidence=item.get("evidence", ""),
                 )
@@ -270,8 +266,15 @@ def _grade_assertions_heuristic(
         elif "not in" in assertion_lower or "is not" in assertion_lower:
             for word in assertion_lower.split():
                 skip = {
-                    "is", "not", "in", "the", "should",
-                    "must", "be", "are", "list",
+                    "is",
+                    "not",
+                    "in",
+                    "the",
+                    "should",
+                    "must",
+                    "be",
+                    "are",
+                    "list",
                 }
                 if word not in skip and word not in output_lower:
                     passed = True
@@ -281,25 +284,29 @@ def _grade_assertions_heuristic(
                 evidence = "Excluded term found in output"
         else:
             noise = {
-                "should", "must", "the", "output", "response",
-                "includes", "contains", "each", "with", "that",
-                "from", "have", "this", "and", "for", "are",
+                "should",
+                "must",
+                "the",
+                "output",
+                "response",
+                "includes",
+                "contains",
+                "each",
+                "with",
+                "that",
+                "from",
+                "have",
+                "this",
+                "and",
+                "for",
+                "are",
             }
-            keywords = [
-                w for w in assertion_lower.split()
-                if len(w) > 3 and w not in noise
-            ]
+            keywords = [w for w in assertion_lower.split() if len(w) > 3 and w not in noise]
             matches = [k for k in keywords if k in output_lower]
             passed = len(matches) >= max(1, len(keywords) // 3)
-            evidence = (
-                f"Keyword match: {matches}"
-                if passed
-                else f"No keyword match from: {keywords}"
-            )
+            evidence = f"Keyword match: {matches}" if passed else f"No keyword match from: {keywords}"
 
-        results.append(
-            AssertionResult(text=assertion, passed=passed, evidence=evidence)
-        )
+        results.append(AssertionResult(text=assertion, passed=passed, evidence=evidence))
 
     return results
 
@@ -330,45 +337,42 @@ def _run_config(
             output = f"ERROR: {exc}"
             duration_ms = 0.0
 
-        timings.append(TimingResult(
-            eval_id=eval_id,
-            duration_ms=duration_ms,
-            response_length=len(output),
-        ))
+        timings.append(
+            TimingResult(
+                eval_id=eval_id,
+                duration_ms=duration_ms,
+                response_length=len(output),
+            )
+        )
 
         if assertions:
             if use_llm_grading:
-                assertion_results = _grade_assertions_with_llm(
-                    prompt, expected_output, output, assertions
-                )
+                assertion_results = _grade_assertions_with_llm(prompt, expected_output, output, assertions)
             else:
-                assertion_results = _grade_assertions_heuristic(
-                    output, assertions
-                )
+                assertion_results = _grade_assertions_heuristic(output, assertions)
         else:
             assertion_results = []
 
         passed = sum(1 for r in assertion_results if r.passed)
         failed = len(assertion_results) - passed
 
-        gradings.append(GradingResult(
-            eval_id=eval_id,
-            prompt=prompt,
-            output=output,
-            assertion_results=assertion_results,
-            passed=passed,
-            failed=failed,
-            total=len(assertion_results),
-            pass_rate=passed / len(assertion_results) if assertion_results else 0.0,
-        ))
+        gradings.append(
+            GradingResult(
+                eval_id=eval_id,
+                prompt=prompt,
+                output=output,
+                assertion_results=assertion_results,
+                passed=passed,
+                failed=failed,
+                total=len(assertion_results),
+                pass_rate=passed / len(assertion_results) if assertion_results else 0.0,
+            )
+        )
 
     total = sum(g.total for g in gradings)
     passed_total = sum(g.passed for g in gradings)
     overall_rate = passed_total / total if total else 0.0
-    mean_dur = (
-        sum(t.duration_ms for t in timings) / len(timings)
-        if timings else 0.0
-    )
+    mean_dur = sum(t.duration_ms for t in timings) / len(timings) if timings else 0.0
 
     return ConfigResult(
         gradings=gradings,
@@ -419,9 +423,7 @@ def run_skill_evals(
     """
     evals_data = load_skill_evals(agent_name)
     if not evals_data:
-        raise FileNotFoundError(
-            f"No evals/evals.json found for {agent_name}"
-        )
+        raise FileNotFoundError(f"No evals/evals.json found for {agent_name}")
 
     skill_name = evals_data["skill_name"]
     eval_cases = evals_data["evals"]
@@ -494,9 +496,7 @@ def save_results(
             eval_dir.mkdir(parents=True, exist_ok=True)
 
             grading_data = {
-                "assertion_results": [
-                    asdict(r) for r in grading.assertion_results
-                ],
+                "assertion_results": [asdict(r) for r in grading.assertion_results],
                 "summary": {
                     "passed": grading.passed,
                     "failed": grading.failed,
@@ -545,9 +545,7 @@ def save_results(
                 "eval_id": g.eval_id,
                 "with_skill_pass_rate": g.pass_rate,
                 "without_skill_pass_rate": (
-                    benchmark.without_skill.gradings[i].pass_rate
-                    if i < len(benchmark.without_skill.gradings)
-                    else None
+                    benchmark.without_skill.gradings[i].pass_rate if i < len(benchmark.without_skill.gradings) else None
                 ),
             }
             for i, g in enumerate(benchmark.with_skill.gradings)

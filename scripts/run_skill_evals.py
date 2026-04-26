@@ -49,34 +49,34 @@ def _print_results(benchmark: BenchmarkResult) -> None:
     adds_value = benchmark.delta_pass_rate > 0
 
     status = "PASS" if (skill_ok and adds_value) else "FAIL"
-    print(f"\n{'='*65}")
+    print(f"\n{'=' * 65}")
     print(f"  Skill: {benchmark.skill_name}  [{status}]")
-    print(f"{'='*65}")
+    print(f"{'=' * 65}")
 
     ws = benchmark.with_skill
     wo = benchmark.without_skill
-    print(f"  WITH skill:    {ws.passed_assertions}/{ws.total_assertions} "
-          f"assertions ({ws.pass_rate:.0%}) | {ws.mean_duration_ms:.0f}ms avg")
+    print(
+        f"  WITH skill:    {ws.passed_assertions}/{ws.total_assertions} "
+        f"assertions ({ws.pass_rate:.0%}) | {ws.mean_duration_ms:.0f}ms avg"
+    )
     if wo.total_assertions > 0:
-        print(f"  WITHOUT skill: {wo.passed_assertions}/{wo.total_assertions} "
-              f"assertions ({wo.pass_rate:.0%}) | {wo.mean_duration_ms:.0f}ms avg")
-        print(f"  DELTA:         {delta_pct:+.0f}% pass rate | "
-              f"{benchmark.delta_duration_ms:+.0f}ms time")
+        print(
+            f"  WITHOUT skill: {wo.passed_assertions}/{wo.total_assertions} "
+            f"assertions ({wo.pass_rate:.0%}) | {wo.mean_duration_ms:.0f}ms avg"
+        )
+        print(f"  DELTA:         {delta_pct:+.0f}% pass rate | {benchmark.delta_duration_ms:+.0f}ms time")
     else:
         print("  WITHOUT skill: (skipped)")
     print()
 
     for i, grading in enumerate(ws.gradings):
         icon = "PASS" if grading.pass_rate >= 0.8 else "FAIL"
-        print(f"  [{icon}] Eval {grading.eval_id}: "
-              f"{grading.prompt[:65]}...")
-        print(f"        with_skill: "
-              f"{grading.passed}/{grading.total} assertions")
+        print(f"  [{icon}] Eval {grading.eval_id}: {grading.prompt[:65]}...")
+        print(f"        with_skill: {grading.passed}/{grading.total} assertions")
 
         if i < len(wo.gradings):
             wog = wo.gradings[i]
-            print(f"        without:    "
-                  f"{wog.passed}/{wog.total} assertions")
+            print(f"        without:    {wog.passed}/{wog.total} assertions")
 
         for ar in grading.assertion_results:
             mark = "+" if ar.passed else "-"
@@ -87,9 +87,7 @@ def _print_results(benchmark: BenchmarkResult) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="Run agentskills.io skill evals (with vs without skill)"
-    )
+    parser = argparse.ArgumentParser(description="Run agentskills.io skill evals (with vs without skill)")
     parser.add_argument(
         "--agent",
         choices=list(AGENT_SKILL_DIRS.keys()),
@@ -145,13 +143,9 @@ def main() -> int:
 
             if benchmark.with_skill.pass_rate < 0.8:
                 all_passed = False
-            if (
-                not args.skip_baseline
-                and benchmark.delta_pass_rate <= 0
-            ):
+            if not args.skip_baseline and benchmark.delta_pass_rate <= 0:
                 logger.warning(
-                    "  %s: skill did NOT improve over baseline "
-                    "(delta=%.0f%%)",
+                    "  %s: skill did NOT improve over baseline (delta=%.0f%%)",
                     agent_name,
                     benchmark.delta_pass_rate * 100,
                 )

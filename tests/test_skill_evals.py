@@ -58,14 +58,9 @@ class TestSkillEvalDataIntegrity:
         assert data is not None
         for case in data["evals"]:
             assertions = case.get("assertions", [])
-            assert len(assertions) >= 2, (
-                f"Eval {case['id']} needs at least 2 assertions, "
-                f"has {len(assertions)}"
-            )
+            assert len(assertions) >= 2, f"Eval {case['id']} needs at least 2 assertions, has {len(assertions)}"
             for assertion in assertions:
-                assert len(assertion) > 10, (
-                    f"Assertion too vague: '{assertion}'"
-                )
+                assert len(assertion) > 10, f"Assertion too vague: '{assertion}'"
 
     @pytest.mark.parametrize("agent_name", SKILL_AGENTS)
     def test_skill_name_matches_directory(self, agent_name: str):
@@ -73,10 +68,7 @@ class TestSkillEvalDataIntegrity:
         assert data is not None
         skill_dir = AGENT_SKILL_DIRS[agent_name]
         dir_name = Path(skill_dir).name
-        assert data["skill_name"] == dir_name, (
-            f"skill_name '{data['skill_name']}' doesn't match "
-            f"directory '{dir_name}'"
-        )
+        assert data["skill_name"] == dir_name, f"skill_name '{data['skill_name']}' doesn't match directory '{dir_name}'"
 
     @pytest.mark.parametrize("agent_name", SKILL_AGENTS)
     def test_eval_ids_unique(self, agent_name: str):
@@ -93,10 +85,7 @@ class TestSkillEvalDataIntegrity:
             if data:
                 for case in data["evals"]:
                     total_assertions += len(case.get("assertions", []))
-        assert total_assertions >= 30, (
-            f"Only {total_assertions} total assertions across all "
-            f"skills (need 30+)"
-        )
+        assert total_assertions >= 30, f"Only {total_assertions} total assertions across all skills (need 30+)"
 
 
 @pytest.mark.skill_eval
@@ -121,9 +110,7 @@ class TestSkillEvalExecution:
             pytest.skip(f"Agent {agent_name} not reachable: {exc}")
             return
 
-        assert benchmark.with_skill.total_assertions > 0, (
-            "No assertions were graded"
-        )
+        assert benchmark.with_skill.total_assertions > 0, "No assertions were graded"
 
         ws_details = "\n".join(
             f"  [{'+' if a.passed else '-'}] {a.text}: {a.evidence}"
@@ -167,6 +154,5 @@ class TestSkillEvalExecution:
 
         for grading in benchmark.with_skill.gradings:
             assert not grading.output.startswith("ERROR:"), (
-                f"Eval {grading.eval_id} returned error: "
-                f"{grading.output[:200]}"
+                f"Eval {grading.eval_id} returned error: {grading.output[:200]}"
             )
