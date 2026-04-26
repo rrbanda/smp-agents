@@ -508,12 +508,43 @@ Every agent exposes the [A2A protocol](https://google.github.io/A2A) -- a JSON-R
 
 ### Endpoints
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/.well-known/agent-card.json` | Agent discovery card (name, capabilities, tools) |
-| `POST` | `/` | JSON-RPC endpoint (`message/send`) |
-| `GET` | `/healthz` | Liveness probe (always 200) |
-| `GET` | `/readyz` | Readiness probe (checks Neo4j) |
+| Method | Path | Auth Required | Description |
+|--------|------|:---:|-------------|
+| `GET` | `/.well-known/agent-card.json` | No | Agent discovery card (name, capabilities, tools) |
+| `POST` | `/` | **Yes** | JSON-RPC endpoint (`message/send`) |
+| `GET` | `/healthz` | No | Liveness probe (always 200) |
+| `GET` | `/readyz` | No | Readiness probe (checks Neo4j) |
+
+### Authentication
+
+Agents are protected by [AuthBridge](https://github.com/kagenti/kagenti) with SPIFFE-based workload identity. Callers must include a valid Keycloak JWT in the `Authorization` header.
+
+**How it works for a UI:**
+
+1. The UI authenticates with Keycloak (standard OIDC login) and gets a JWT access token
+2. Include the token on every A2A request: `Authorization: Bearer <token>`
+3. AuthBridge validates the JWT and forwards the request to the agent
+4. The UI never needs agent secrets -- only its own Keycloak credentials
+
+**Getting a token (for testing):**
+
+```bash
+# Get a token from Keycloak
+KEYCLOAK_URL=https://keycloak-keycloak.apps.ocp.v7hjl.sandbox2288.opentlc.com
+TOKEN=$(curl -sk -X POST "$KEYCLOAK_URL/realms/kagenti/protocol/openid-connect/token" \
+  -d "grant_type=password" \
+  -d "client_id=kagenti" \
+  -d "username=YOUR_USER" \
+  -d "password=YOUR_PASS" | jq -r '.access_token')
+
+# Use the token in A2A requests
+curl -s -X POST $BASE/ \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{ ... }'
+```
+
+**Bypassed paths** (no token needed): `/.well-known/*`, `/healthz`, `/readyz`, `/livez`
 
 ### Request Format
 
@@ -555,7 +586,7 @@ To extract the text: `response.result.artifacts[0].parts[0].text`
 ### Agent Discovery
 
 ```bash
-# List all agents and their capabilities
+# List all agents and their capabilities (no auth needed)
 BASE=https://skill-advisor-smp-agents.apps.ocp.v7hjl.sandbox2288.opentlc.com
 
 curl -s $BASE/.well-known/agent-card.json | jq '{name, description, skills: [.skills[].name]}'
@@ -576,6 +607,7 @@ Response:
 ```bash
 curl -s -X POST $BASE/ \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
   -d '{
     "jsonrpc": "2.0",
     "method": "message/send",
@@ -625,6 +657,7 @@ BASE=https://kg-qa-smp-agents.apps.ocp.v7hjl.sandbox2288.opentlc.com
 
 curl -s -X POST $BASE/ \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
   -d '{
     "jsonrpc": "2.0",
     "method": "message/send",
@@ -650,6 +683,7 @@ BASE=https://bundle-validator-smp-agents.apps.ocp.v7hjl.sandbox2288.opentlc.com
 
 curl -s -X POST $BASE/ \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
   -d '{
     "jsonrpc": "2.0",
     "method": "message/send",
@@ -679,6 +713,7 @@ BASE=https://playground-smp-agents.apps.ocp.v7hjl.sandbox2288.opentlc.com
 
 curl -s -X POST $BASE/ \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
   -d '{
     "jsonrpc": "2.0",
     "method": "message/send",
@@ -704,6 +739,7 @@ BASE=https://skill-builder-smp-agents.apps.ocp.v7hjl.sandbox2288.opentlc.com
 
 curl -s -X POST $BASE/ \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
   -d '{
     "jsonrpc": "2.0",
     "method": "message/send",
@@ -840,8 +876,9 @@ graph LR
 2. CI pushes images to GHCR (`ghcr.io/rrbanda/smp-agents/<agent>:sha-<commit>`)
 3. CD workflow updates image tags in `k8s/overlays/dev/kustomization.yaml` and commits
 4. ArgoCD detects the commit and auto-syncs Deployments, Services, and Routes
-5. Kagenti operator sees `kagenti.io/type=agent` labels and auto-creates AgentCard CRDs
-6. Agents are discoverable via A2A protocol at `/.well-known/agent-card.json`
+5. Kagenti webhook injects sidecars: `envoy-proxy`, `spiffe-helper`, `client-registration`, `proxy-init`
+6. Each agent gets a SPIFFE identity and registers as a Keycloak OIDC client automatically
+7. Agents are discoverable via A2A protocol at `/.well-known/agent-card.json`
 
 ```bash
 # One-time: apply the ArgoCD Application
@@ -863,18 +900,36 @@ k8s/
 │   ├── namespace.yaml
 │   ├── configmap.yaml             # smp-config (config.yaml for cluster)
 │   ├── secret.yaml                # smp-secrets (NEO4J_PASSWORD placeholder)
-│   └── <agent>/                   # Per-agent Deployment + Service (x5)
+│   ├── authbridge.yaml            # AuthBridge config: environments, runtime-config, keycloak secret
+│   └── <agent>/                   # Per-agent resources (x5)
+│       ├── deployment.yaml        # Deployment with SA, labels, security contexts
+│       ├── service.yaml
+│       └── serviceaccount.yaml    # Dedicated SA for stable SPIFFE IDs
 ├── overlays/
 │   └── dev/                       # Dev cluster overlay
 │       ├── kustomization.yaml     # Image tags (updated by CD workflow)
 │       ├── httproutes.yaml        # OpenShift Routes for external access
-│       └── patches/
-│           └── secret-override.yaml
+│       └── patches/               # Env-specific overrides (secrets NOT in Git)
 └── argocd/
     └── application.yaml           # ArgoCD Application (auto-sync + self-heal)
 ```
 
-Each Deployment includes liveness (`/healthz`) and readiness (`/readyz`) probes, resource limits, ConfigMap volume mount, and secret references.
+Each Deployment includes:
+- Liveness (`/healthz`) and readiness (`/readyz`) probes, resource limits
+- Dedicated ServiceAccount for stable SPIFFE identity
+- Security labels: `kagenti.io/inject`, `kagenti.io/spire`, `kagenti.io/client-registration-inject`
+- Container security context: `runAsNonRoot`, `drop ALL` capabilities, `seccomp: RuntimeDefault`
+
+**Secrets management:** Secret overlay files (Keycloak admin, Neo4j password) are in `.gitignore` and must be applied directly to the cluster:
+
+```bash
+oc create secret generic keycloak-admin-secret -n smp-agents \
+  --from-literal=KEYCLOAK_ADMIN_USERNAME=<user> \
+  --from-literal=KEYCLOAK_ADMIN_PASSWORD=<pass>
+
+oc create secret generic smp-secrets -n smp-agents \
+  --from-literal=NEO4J_PASSWORD=<pass>
+```
 
 ### Manual Kagenti Deployment
 
