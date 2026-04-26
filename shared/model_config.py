@@ -12,7 +12,6 @@ from functools import lru_cache
 from typing import Any
 
 import yaml
-from google.adk.models.lite_llm import LiteLlm
 
 logger = logging.getLogger(__name__)
 
@@ -68,8 +67,10 @@ def load_config() -> dict[str, Any]:
     return _resolve_env_vars(raw)  # type: ignore[no-any-return]
 
 
-def get_agent_model() -> LiteLlm:
+def get_agent_model() -> Any:
     """Returns a LiteLlm instance from config."""
+    from google.adk.models.lite_llm import LiteLlm
+
     cfg = load_config()["model"]["agent"]
     kwargs: dict[str, Any] = {"model": cfg["id"]}
     if cfg.get("api_base"):
