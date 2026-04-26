@@ -107,7 +107,7 @@ def _parse_tags(tags_json: str) -> list[str]:
 
 
 def _upsert_skill(tx, skill_data: dict):
-    """MERGE a Skill node and associated relationships."""
+    """MERGE a Skill node and associated Tag, Domain, Tool relationships."""
     name = skill_data.get("name")
     if not name:
         return
@@ -123,6 +123,9 @@ def _upsert_skill(tx, skill_data: dict):
             s.author = $author,
             s.license = $license,
             s.compatibility = $compatibility,
+            s.category = $category,
+            s.plugin = $plugin,
+            s.lang = $lang,
             s.displayName = $displayName,
             s.bundle = $bundle,
             s.wordCount = $wordCount,
@@ -139,6 +142,9 @@ def _upsert_skill(tx, skill_data: dict):
         author=skill_data.get("authors", ""),
         license=skill_data.get("license", ""),
         compatibility=skill_data.get("compatibility", ""),
+        category=skill_data.get("category", ""),
+        plugin=skill_data.get("plugin", ""),
+        lang=skill_data.get("lang", ""),
         displayName=skill_data.get("display_name", name),
         bundle=skill_data.get("bundle", False),
         wordCount=skill_data.get("word_count", 0),
@@ -176,6 +182,32 @@ def _upsert_skill(tx, skill_data: dict):
             """,
             domain=ns,
             skill_name=name,
+        )
+
+    for tool in skill_data.get("tools", []):
+        if tool:
+            tx.run(
+                """
+                MERGE (t:Tool {name: $tool})
+                WITH t
+                MATCH (s:Skill {name: $skill_name})
+                MERGE (s)-[:USES_TOOL]->(t)
+                """,
+                tool=tool,
+                skill_name=name,
+            )
+
+    plugin = skill_data.get("plugin", "")
+    if plugin:
+        tx.run(
+            """
+            MATCH (s:Skill {name: $skill_name})
+            MATCH (other:Skill)
+            WHERE other.plugin = $plugin AND other.name <> $skill_name
+            MERGE (s)-[:SAME_PLUGIN]-(other)
+            """,
+            skill_name=name,
+            plugin=plugin,
         )
 
     for bundled_skill in skill_data.get("bundle_skills_list", []):
@@ -228,7 +260,7 @@ def main():
         bundle_skills = skill.get("bundle_skills", "").split(",") if skill.get("bundle_skills") else []
 
         skill_data = {
-            "name": skill["name"],
+            "name": skill.get("display_name", skill["name"]),
             "description": skill.get("description", ""),
             "namespace": skill.get("namespace", ""),
             "version": skill.get("version", ""),
@@ -237,6 +269,10 @@ def main():
             "authors": skill.get("authors", ""),
             "license": skill.get("license", ""),
             "compatibility": skill.get("compatibility", ""),
+            "category": skill.get("compatibility", ""),
+            "plugin": "",
+            "lang": "",
+            "tools": [],
             "bundle": skill.get("bundle", False),
             "word_count": skill.get("word_count", 0),
             "digest": skill.get("digest", ""),
@@ -249,6 +285,17 @@ def main():
             content = _fetch_skill_content(base_url, skill.get("namespace", ""), skill["name"], skill["version"])
             if content:
                 skill_data["prompt"] = content
+                fm = _parse_frontmatter(content)
+                if fm.get("plugin"):
+                    skill_data["plugin"] = fm["plugin"]
+                if fm.get("lang"):
+                    skill_data["lang"] = fm["lang"]
+                if fm.get("tools"):
+                    skill_data["tools"] = fm["tools"]
+                if fm.get("category"):
+                    skill_data["category"] = fm["category"]
+                if fm.get("tags") and not tags:
+                    skill_data["tags"] = fm["tags"]
 
         try:
             with driver.session(database=neo4j_cfg.get("database", "neo4j")) as session:
