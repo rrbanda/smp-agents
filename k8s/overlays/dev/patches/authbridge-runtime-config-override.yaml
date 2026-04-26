@@ -1,23 +1,13 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: environments
-  namespace: smp-agents
-data:
-  SPIRE_ENABLED: "true"
-  KEYCLOAK_URL: "http://keycloak-service.keycloak.svc:8080"
-  KEYCLOAK_REALM: "kagenti"
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
   name: authbridge-runtime-config
   namespace: smp-agents
 data:
   config.yaml: |
     mode: envoy-sidecar
     inbound:
-      issuer: "REPLACE_WITH_KEYCLOAK_PUBLIC_URL/realms/kagenti"
+      issuer: "https://keycloak-keycloak.apps.ocp.v7hjl.sandbox2288.opentlc.com/realms/kagenti"
     outbound:
       keycloak_url: "http://keycloak-service.keycloak.svc:8080"
       keycloak_realm: "kagenti"
@@ -33,11 +23,3 @@ data:
         - "/healthz"
         - "/readyz"
         - "/livez"
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: keycloak-admin-secret
-  namespace: smp-agents
-type: Opaque
-data: {}
