@@ -44,6 +44,87 @@ _TIMEOUT = 30
 _TLS_VERIFY = True
 
 
+# ---------------------------------------------------------------------------
+# Neo4j HTTP Transaction API adapter (for environments without Bolt access)
+# ---------------------------------------------------------------------------
+
+class _HttpConsumeResult:
+    """Mimics neo4j.Result enough for .consume() and .single() calls."""
+    def __init__(self, data: dict):
+        self._data = data
+        results = data.get("results", [{}])[0]
+        self._columns = results.get("columns", [])
+        self._rows = results.get("data", [])
+        self._records = [dict(zip(self._columns, row["row"])) for row in self._rows]
+
+    def consume(self) -> None:
+        pass
+
+    def single(self) -> dict | None:
+        return self._records[0] if self._records else None
+
+    def __iter__(self):
+        return iter(self._records)
+
+
+class _HttpTransaction:
+    """Executes Cypher via Neo4j HTTP Transaction API."""
+    def __init__(self, http_url: str, database: str, auth: tuple[str, str], verify_tls: bool):
+        import base64
+        self._url = f"{http_url.rstrip('/')}/db/{database}/tx/commit"
+        creds = base64.b64encode(f"{auth[0]}:{auth[1]}".encode()).decode()
+        self._headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Basic {creds}",
+        }
+        self._verify_tls = verify_tls
+
+    def run(self, cypher: str, **params: Any) -> _HttpConsumeResult:
+        body = json.dumps({"statements": [{"statement": cypher, "parameters": params}]}).encode()
+        req = urllib.request.Request(self._url, data=body, headers=self._headers)
+        ctx = ssl.create_default_context()
+        if not self._verify_tls:
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+        resp = urllib.request.urlopen(req, timeout=_TIMEOUT, context=ctx)
+        data = json.loads(resp.read().decode())
+        if data.get("errors"):
+            raise RuntimeError(f"Neo4j HTTP error: {data['errors'][0].get('message', data['errors'])}")
+        return _HttpConsumeResult(data)
+
+
+class _HttpSession:
+    """Wraps HTTP transaction to mimic neo4j.Session interface."""
+    def __init__(self, http_url: str, database: str, auth: tuple[str, str], verify_tls: bool):
+        self._tx = _HttpTransaction(http_url, database, auth, verify_tls)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        pass
+
+    def execute_write(self, func: Any, *args: Any, **kwargs: Any) -> Any:
+        return func(self._tx, *args, **kwargs)
+
+    def run(self, cypher: str, **params: Any) -> _HttpConsumeResult:
+        return self._tx.run(cypher, **params)
+
+
+class _HttpDriver:
+    """Mimics neo4j.GraphDatabase.driver for HTTP-only environments."""
+    def __init__(self, http_url: str, auth: tuple[str, str], verify_tls: bool = True):
+        self._http_url = http_url
+        self._auth = auth
+        self._verify_tls = verify_tls
+
+    def session(self, database: str = "neo4j") -> _HttpSession:
+        return _HttpSession(self._http_url, database, self._auth, self._verify_tls)
+
+    def close(self) -> None:
+        pass
+
+
 def _get_tls_ctx() -> ssl.SSLContext:
     if _TLS_VERIFY:
         return ssl.create_default_context()
@@ -583,8 +664,13 @@ def main() -> None:
     base_url = catalog_cfg["base_url"]
     database = neo4j_cfg.get("database", "neo4j")
 
-    logger.info("Catalog API: %s", base_url)
-    logger.info("Neo4j URI:   %s", neo4j_cfg["uri"])
+    http_url = neo4j_cfg.get("http_url", "")
+    bolt_uri = neo4j_cfg.get("uri", "")
+
+    logger.info("Catalog API:    %s", base_url)
+    if http_url:
+        logger.info("Neo4j HTTP URL: %s", http_url)
+    logger.info("Neo4j Bolt URI: %s", bolt_uri or "(not set)")
 
     # Step 1: Trigger catalog sync
     if not args.skip_sync and not args.dry_run:
@@ -609,13 +695,19 @@ def main() -> None:
             logger.info("  ... and %d more", len(skills) - 5)
         return
 
-    # Step 3: Sync to Neo4j
-    from neo4j import GraphDatabase
+    # Step 3: Connect to Neo4j (prefer HTTP route, fall back to Bolt driver)
+    auth = (neo4j_cfg["user"], neo4j_cfg["password"])
 
-    driver = GraphDatabase.driver(
-        neo4j_cfg["uri"],
-        auth=(neo4j_cfg["user"], neo4j_cfg["password"]),
-    )
+    if http_url:
+        logger.info("Using Neo4j HTTP Transaction API")
+        driver = _HttpDriver(http_url, auth, verify_tls=_TLS_VERIFY)
+    elif bolt_uri:
+        from neo4j import GraphDatabase
+        logger.info("Using Neo4j Bolt driver")
+        driver = GraphDatabase.driver(bolt_uri, auth=auth)
+    else:
+        logger.error("Neither NEO4J_HTTP_URL nor NEO4J_URI is set. Cannot connect to Neo4j.")
+        sys.exit(1)
 
     try:
         logger.info("Step 3: Syncing %d skills to Neo4j...", len(skills))
