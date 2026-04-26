@@ -517,32 +517,52 @@ Every agent exposes the [A2A protocol](https://google.github.io/A2A) -- a JSON-R
 
 ### Authentication
 
-Agents are protected by [AuthBridge](https://github.com/kagenti/kagenti) with SPIFFE-based workload identity. Callers must include a valid Keycloak JWT in the `Authorization` header.
+Agents are protected by [AuthBridge](https://github.com/kagenti/kagenti) with SPIFFE-based workload identity. Every `POST /` request must include a valid Keycloak JWT in the `Authorization` header.
 
-**How it works for a UI:**
+**How it works:**
 
-1. The UI authenticates with Keycloak (standard OIDC login) and gets a JWT access token
-2. Include the token on every A2A request: `Authorization: Bearer <token>`
-3. AuthBridge validates the JWT and forwards the request to the agent
-4. The UI never needs agent secrets -- only its own Keycloak credentials
+1. Each agent pod has a `client-registration` sidecar that registers itself in Keycloak with its SPIFFE identity (e.g. `spiffe://.../ns/smp-agents/sa/skill-advisor`) and creates an audience scope (e.g. `agent-smp-agents-skill-advisor-aud`)
+2. These audience scopes are added as default scopes to the `kagenti` OIDC client, so any token issued through that client automatically includes all agent SPIFFE IDs in the JWT `aud` claim
+3. The `envoy-proxy` sidecar validates that the JWT's `aud` contains the target agent's SPIFFE ID before forwarding the request
 
-**Getting a token (for testing):**
+**For a UI integration:**
+
+1. The UI authenticates with Keycloak using standard OIDC (authorization code flow) through the `kagenti` client
+2. The resulting JWT already contains the correct audience claims for all agents
+3. Include the token on every A2A request: `Authorization: Bearer <token>`
+4. The UI never needs agent secrets -- only the user's own Keycloak credentials
+
+**Getting a token (for testing with curl):**
+
+The `kagenti` client is a **public** OIDC client (no client secret). Use the resource-owner password grant with a Keycloak user:
 
 ```bash
-# Get a token from Keycloak
 KEYCLOAK_URL=https://keycloak-keycloak.apps.ocp.v7hjl.sandbox2288.opentlc.com
+
+# Step 1: Get a JWT (token expires in ~30 minutes)
 TOKEN=$(curl -sk -X POST "$KEYCLOAK_URL/realms/kagenti/protocol/openid-connect/token" \
   -d "grant_type=password" \
   -d "client_id=kagenti" \
   -d "username=YOUR_USER" \
   -d "password=YOUR_PASS" | jq -r '.access_token')
 
-# Use the token in A2A requests
+# Step 2: Verify the token has agent audiences (optional)
+echo "$TOKEN" | cut -d'.' -f2 | base64 -d 2>/dev/null | jq '.aud'
+# Should list SPIFFE IDs like: ["spiffe://.../sa/skill-advisor", "spiffe://.../sa/kg-qa", ...]
+
+# Step 3: Use the token
+BASE=https://skill-advisor-smp-agents.apps.ocp.v7hjl.sandbox2288.opentlc.com
 curl -s -X POST $BASE/ \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
-  -d '{ ... }'
+  -d '{
+    "jsonrpc": "2.0", "method": "message/send", "id": "1",
+    "params": {"message": {"messageId": "test-1", "role": "user",
+      "parts": [{"kind": "text", "text": "What skills do you know about?"}]}}
+  }' | jq -r '.result.artifacts[0].parts[0].text'
 ```
+
+> **Common mistake:** Using `client_credentials` grant with the `kagenti-api` client will fail -- that token's `aud` is `"account"` and does not include the agent SPIFFE audience scopes. Always use the `kagenti` public client with `grant_type=password`.
 
 **Bypassed paths** (no token needed): `/.well-known/*`, `/healthz`, `/readyz`, `/livez`
 
