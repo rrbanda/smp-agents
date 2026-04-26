@@ -4,6 +4,6 @@
       "threshold": 0.0,
       "match_type": "IN_ORDER"
     },
-    "response_match_score": 0.1
+    "response_match_score": 0.05
   }
 }
