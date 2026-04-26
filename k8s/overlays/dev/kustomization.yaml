@@ -10,12 +10,12 @@ patches:
 
 images:
   - name: ghcr.io/rrbanda/smp-agents/skill-advisor
-    newTag: sha-e4a115f6bcf449ae752de98b8b215eb551ed46db
+    newTag: sha-b24d4378f1849b6e18ac1980bc116b8c1402be2a
   - name: ghcr.io/rrbanda/smp-agents/bundle-validator
-    newTag: sha-e4a115f6bcf449ae752de98b8b215eb551ed46db
+    newTag: sha-b24d4378f1849b6e18ac1980bc116b8c1402be2a
   - name: ghcr.io/rrbanda/smp-agents/kg-qa
-    newTag: sha-e4a115f6bcf449ae752de98b8b215eb551ed46db
+    newTag: sha-b24d4378f1849b6e18ac1980bc116b8c1402be2a
   - name: ghcr.io/rrbanda/smp-agents/playground
-    newTag: sha-e4a115f6bcf449ae752de98b8b215eb551ed46db
+    newTag: sha-b24d4378f1849b6e18ac1980bc116b8c1402be2a
   - name: ghcr.io/rrbanda/smp-agents/skill-builder
-    newTag: sha-e4a115f6bcf449ae752de98b8b215eb551ed46db
+    newTag: sha-b24d4378f1849b6e18ac1980bc116b8c1402be2a
