@@ -12,18 +12,24 @@ resources:
   - namespace.yaml
   - configmap.yaml
   - secret.yaml
+  - authbridge.yaml
   # Skill Advisor
+  - skill-advisor/serviceaccount.yaml
   - skill-advisor/deployment.yaml
   - skill-advisor/service.yaml
   # Bundle Validator
+  - bundle-validator/serviceaccount.yaml
   - bundle-validator/deployment.yaml
   - bundle-validator/service.yaml
   # KG Q&A
+  - kg-qa/serviceaccount.yaml
   - kg-qa/deployment.yaml
   - kg-qa/service.yaml
   # Playground
+  - playground/serviceaccount.yaml
   - playground/deployment.yaml
   - playground/service.yaml
   # Skill Builder
+  - skill-builder/serviceaccount.yaml
   - skill-builder/deployment.yaml
   - skill-builder/service.yaml

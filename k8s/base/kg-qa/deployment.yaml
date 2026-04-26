@@ -18,7 +18,15 @@ spec:
       labels:
         app.kubernetes.io/name: kg-qa
         kagenti.io/type: agent
+        kagenti.io/inject: enabled
+        kagenti.io/spire: enabled
+        kagenti.io/client-registration-inject: "true"
     spec:
+      serviceAccountName: kg-qa
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: agent
           image: ghcr.io/rrbanda/smp-agents/kg-qa:latest
@@ -52,6 +60,12 @@ spec:
             limits:
               cpu: 500m
               memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            runAsNonRoot: true
           livenessProbe:
             httpGet:
               path: /healthz

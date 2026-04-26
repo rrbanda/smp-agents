@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: environments
+  namespace: smp-agents
+data:
+  SPIRE_ENABLED: "true"
+  KEYCLOAK_URL: "http://keycloak-service.keycloak.svc:8080"
+  KEYCLOAK_REALM: "kagenti"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: keycloak-admin-secret
+  namespace: smp-agents
+type: Opaque
+stringData:
+  KEYCLOAK_ADMIN_USERNAME: "REPLACE_ME"
+  KEYCLOAK_ADMIN_PASSWORD: "REPLACE_ME"
