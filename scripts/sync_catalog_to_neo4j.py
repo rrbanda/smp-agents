@@ -150,14 +150,14 @@ def _upsert_skill(tx, skill_data: dict):
         wordCount=skill_data.get("word_count", 0),
         digest=skill_data.get("digest", ""),
         repository=skill_data.get("repository", ""),
-    )
+    ).consume()
 
     if skill_data.get("prompt"):
         tx.run(
             "MATCH (s:Skill {name: $name}) SET s.prompt = $prompt",
             name=name,
             prompt=skill_data["prompt"],
-        )
+        ).consume()
 
     for tag in skill_data.get("tags", []):
         tx.run(
@@ -169,7 +169,7 @@ def _upsert_skill(tx, skill_data: dict):
             """,
             tag=tag,
             skill_name=name,
-        )
+        ).consume()
 
     ns = skill_data.get("namespace", "")
     if ns:
@@ -182,7 +182,7 @@ def _upsert_skill(tx, skill_data: dict):
             """,
             domain=ns,
             skill_name=name,
-        )
+        ).consume()
 
     for tool in skill_data.get("tools", []):
         if tool:
@@ -195,7 +195,7 @@ def _upsert_skill(tx, skill_data: dict):
                 """,
                 tool=tool,
                 skill_name=name,
-            )
+            ).consume()
 
     plugin = skill_data.get("plugin", "")
     if plugin:
@@ -208,7 +208,7 @@ def _upsert_skill(tx, skill_data: dict):
             """,
             skill_name=name,
             plugin=plugin,
-        )
+        ).consume()
 
     for bundled_skill in skill_data.get("bundle_skills_list", []):
         if bundled_skill:
@@ -221,7 +221,7 @@ def _upsert_skill(tx, skill_data: dict):
                 """,
                 parent=name,
                 bundled=bundled_skill.strip(),
-            )
+            ).consume()
 
 
 def main():
@@ -270,9 +270,9 @@ def main():
             "license": skill.get("license", ""),
             "compatibility": skill.get("compatibility", ""),
             "category": skill.get("compatibility", ""),
-            "plugin": "",
-            "lang": "",
-            "tools": [],
+            "plugin": skill.get("plugin", ""),
+            "lang": skill.get("lang", ""),
+            "tools": skill.get("tools", []),
             "bundle": skill.get("bundle", False),
             "word_count": skill.get("word_count", 0),
             "digest": skill.get("digest", ""),
