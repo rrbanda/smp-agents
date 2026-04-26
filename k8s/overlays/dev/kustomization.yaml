@@ -6,8 +6,6 @@ resources:
   - httproutes.yaml
 
 patches:
-  - path: patches/secret-override.yaml
-  - path: patches/keycloak-secret-override.yaml
   - path: patches/authbridge-runtime-config-override.yaml
 
 images:

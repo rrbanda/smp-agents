@@ -6,3 +6,4 @@ dist/
 build/
 .venv/
 test-results/
+k8s/overlays/*/patches/*secret*.yaml
