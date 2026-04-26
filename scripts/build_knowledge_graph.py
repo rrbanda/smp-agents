@@ -4,8 +4,8 @@
 Orchestrates the full pipeline:
   1. Trigger catalog sync (re-index from OCI registry)
   2. Fetch all skills from catalog API
-  3. Fetch SKILL.md content for enriched metadata
-  4. MERGE Skill/Domain/Tag/Tool nodes + relationships into Neo4j
+  3. MERGE Skill/Domain/Tag/Tool nodes + relationships into Neo4j
+  4. Post-process SAME_PLUGIN edges (single pass)
   5. Bootstrap vector embeddings + SIMILAR_TO edges (optional)
   6. Validate the resulting graph
 
@@ -13,6 +13,7 @@ Usage:
     python scripts/build_knowledge_graph.py
     python scripts/build_knowledge_graph.py --skip-embeddings
     python scripts/build_knowledge_graph.py --skip-validation --dry-run
+    python scripts/build_knowledge_graph.py --no-tls-verify
 """
 
 from __future__ import annotations
@@ -40,16 +41,16 @@ logging.basicConfig(
 logger = logging.getLogger("build_knowledge_graph")
 
 _TIMEOUT = 30
-_TLS_CTX: ssl.SSLContext | None = None
+_TLS_VERIFY = True
 
 
 def _get_tls_ctx() -> ssl.SSLContext:
-    global _TLS_CTX
-    if _TLS_CTX is None:
-        _TLS_CTX = ssl.create_default_context()
-        _TLS_CTX.check_hostname = False
-        _TLS_CTX.verify_mode = ssl.CERT_NONE
-    return _TLS_CTX
+    if _TLS_VERIFY:
+        return ssl.create_default_context()
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    return ctx
 
 
 def _http_get(url: str, *, accept: str = "application/json") -> Any:
@@ -85,7 +86,7 @@ def trigger_catalog_sync(base_url: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Step 2+3: Fetch skills + content from catalog
+# Step 2: Fetch skills from catalog
 # ---------------------------------------------------------------------------
 
 def fetch_all_skills(base_url: str) -> list[dict]:
@@ -95,23 +96,15 @@ def fetch_all_skills(base_url: str) -> list[dict]:
     while True:
         url = f"{base_url.rstrip('/')}/api/v1/skills?page={page}&per_page={per_page}"
         data = _http_get(url)
+        if not isinstance(data, dict):
+            logger.error("Unexpected API response type: %s", type(data).__name__)
+            break
         skills = data.get("data", [])
         all_skills.extend(skills)
-        pagination = data.get("pagination", {})
-        total = pagination.get("total", 0)
-        if len(all_skills) >= total or not skills:
+        if len(skills) < per_page:
             break
         page += 1
     return all_skills
-
-
-def fetch_skill_content(base_url: str, repository: str, tag: str) -> str | None:
-    """Fetch SKILL.md content using repository/tag path."""
-    try:
-        url = f"{base_url.rstrip('/')}/api/v1/skills/{repository}/{tag}/content"
-        return _http_get(url, accept="text/markdown")
-    except (urllib.error.HTTPError, urllib.error.URLError):
-        return None
 
 
 def parse_frontmatter(text: str) -> dict:
@@ -136,66 +129,38 @@ def parse_tags(tags_json: str) -> list[str]:
         return []
 
 
-def build_skill_data(skill: dict, base_url: str, fetch_content: bool) -> dict:
-    """Transform a catalog API skill dict into the shape needed for Neo4j upsert.
-
-    In a single-repo setup (e.g. quay.io/rbrhssa/skills) every skill shares
-    the same API ``name`` ("skills"), so the per-version content endpoint is
-    ambiguous.  Metadata is taken from the list API fields instead; content
-    fetch is only used for the SKILL.md prompt text when the display_name can
-    serve as a unique key (via the tag).
-    """
+def build_skill_data(skill: dict) -> dict:
+    """Transform a catalog API skill dict into the shape needed for Neo4j upsert."""
     tags = parse_tags(skill.get("tags_json", ""))
     bundle_skills = (
         skill.get("bundle_skills", "").split(",") if skill.get("bundle_skills") else []
     )
 
-    sd: dict[str, Any] = {
-        "name": skill.get("display_name", skill["name"]),
+    return {
+        "name": skill.get("display_name") or skill.get("name", ""),
         "description": skill.get("description", ""),
         "namespace": skill.get("namespace", ""),
         "version": skill.get("version", ""),
         "status": skill.get("status", ""),
-        "display_name": skill.get("display_name", skill["name"]),
+        "display_name": skill.get("display_name") or skill.get("name", ""),
         "authors": skill.get("authors", ""),
         "license": skill.get("license", ""),
         "compatibility": skill.get("compatibility", ""),
-        "category": skill.get("compatibility", ""),
+        "category": skill.get("category", skill.get("compatibility", "")),
         "plugin": skill.get("plugin", ""),
         "lang": skill.get("lang", ""),
-        "tools": skill.get("tools", []),
+        "tools": skill.get("tools") or [],
         "bundle": skill.get("bundle", False),
         "word_count": skill.get("word_count", 0),
         "digest": skill.get("digest", ""),
         "repository": skill.get("repository", ""),
-        "tags": tags,
-        "bundle_skills_list": bundle_skills,
+        "tags": [t for t in tags if t],
+        "bundle_skills_list": [b.strip() for b in bundle_skills if b.strip()],
     }
-
-    if fetch_content and skill.get("tag"):
-        repo = skill.get("repository", "")
-        tag = skill.get("tag", "")
-        if repo and tag:
-            content = fetch_skill_content(base_url, repo, tag)
-            if content:
-                sd["prompt"] = content
-                fm = parse_frontmatter(content)
-                if fm.get("plugin") and not sd["plugin"]:
-                    sd["plugin"] = fm["plugin"]
-                if fm.get("lang") and not sd["lang"]:
-                    sd["lang"] = fm["lang"]
-                if fm.get("tools") and not sd["tools"]:
-                    sd["tools"] = fm["tools"]
-                if fm.get("category") and not sd["category"]:
-                    sd["category"] = fm["category"]
-                if fm.get("tags") and not tags:
-                    sd["tags"] = fm["tags"]
-
-    return sd
 
 
 # ---------------------------------------------------------------------------
-# Step 4: MERGE into Neo4j
+# Step 3: MERGE into Neo4j
 # ---------------------------------------------------------------------------
 
 def upsert_skill(tx: Any, skill_data: dict) -> None:
@@ -250,16 +215,31 @@ def upsert_skill(tx: Any, skill_data: dict) -> None:
             prompt=skill_data["prompt"],
         ).consume()
 
-    for tag in skill_data.get("tags", []):
+    # Delete stale edges before re-creating from current data
+    tx.run(
+        "MATCH (s:Skill {name: $name})-[r:TAGGED_WITH]->() DELETE r",
+        name=name,
+    ).consume()
+    tx.run(
+        "MATCH (s:Skill {name: $name})-[r:BELONGS_TO]->() DELETE r",
+        name=name,
+    ).consume()
+    tx.run(
+        "MATCH (s:Skill {name: $name})-[r:USES_TOOL]->() DELETE r",
+        name=name,
+    ).consume()
+
+    tags = skill_data.get("tags", [])
+    if tags:
         tx.run(
             """
-            MERGE (t:Tag {name: $tag})
-            WITH t
-            MATCH (s:Skill {name: $skill_name})
+            MATCH (s:Skill {name: $name})
+            UNWIND $tags AS tag_name
+            MERGE (t:Tag {name: tag_name})
             MERGE (s)-[:TAGGED_WITH]->(t)
             """,
-            tag=tag,
-            skill_name=name,
+            name=name,
+            tags=tags,
         ).consume()
 
     ns = skill_data.get("namespace", "")
@@ -275,69 +255,80 @@ def upsert_skill(tx: Any, skill_data: dict) -> None:
             skill_name=name,
         ).consume()
 
-    for tool in skill_data.get("tools", []):
-        if tool:
-            tx.run(
-                """
-                MERGE (t:Tool {name: $tool})
-                WITH t
-                MATCH (s:Skill {name: $skill_name})
-                MERGE (s)-[:USES_TOOL]->(t)
-                """,
-                tool=tool,
-                skill_name=name,
-            ).consume()
-
-    plugin = skill_data.get("plugin", "")
-    if plugin:
+    tools = [t for t in skill_data.get("tools", []) if t]
+    if tools:
         tx.run(
             """
-            MATCH (s:Skill {name: $skill_name})
-            MATCH (other:Skill)
-            WHERE other.plugin = $plugin AND other.name <> $skill_name
-            MERGE (s)-[:SAME_PLUGIN]-(other)
+            MATCH (s:Skill {name: $name})
+            UNWIND $tools AS tool_name
+            MERGE (t:Tool {name: tool_name})
+            MERGE (s)-[:USES_TOOL]->(t)
             """,
-            skill_name=name,
-            plugin=plugin,
+            name=name,
+            tools=tools,
         ).consume()
 
-    for bundled in skill_data.get("bundle_skills_list", []):
-        if bundled:
-            tx.run(
-                """
-                MERGE (b:Skill {name: $bundled})
-                WITH b
-                MATCH (s:Skill {name: $parent})
-                MERGE (s)-[:BUNDLES]->(b)
-                """,
-                parent=name,
-                bundled=bundled.strip(),
-            ).consume()
+    bundle_list = skill_data.get("bundle_skills_list", [])
+    if bundle_list:
+        tx.run(
+            """
+            MATCH (s:Skill {name: $parent})
+            UNWIND $bundled_names AS bname
+            MERGE (b:Skill {name: bname})
+            MERGE (s)-[:BUNDLES]->(b)
+            """,
+            parent=name,
+            bundled_names=bundle_list,
+        ).consume()
+
+
+def create_same_plugin_edges(driver: Any, database: str) -> int:
+    """Single-pass SAME_PLUGIN edge creation -- replaces O(n^2) per-skill approach."""
+    with driver.session(database=database) as session:
+        session.run(
+            "MATCH ()-[r:SAME_PLUGIN]-() DELETE r"
+        ).consume()
+
+        result = session.run(
+            """
+            MATCH (a:Skill), (b:Skill)
+            WHERE a.plugin IS NOT NULL AND a.plugin <> ''
+              AND a.plugin = b.plugin AND id(a) < id(b)
+            MERGE (a)-[:SAME_PLUGIN]-(b)
+            RETURN count(*) AS created
+            """
+        )
+        record = result.single()
+        return record["created"] if record else 0
 
 
 def sync_to_neo4j(
-    skills: list[dict], base_url: str, driver: Any, database: str
+    skills: list[dict], driver: Any, database: str
 ) -> tuple[int, int]:
     synced = 0
     failed = 0
-    for i, skill in enumerate(skills, 1):
-        if i % 50 == 0:
-            logger.info("  [%d/%d] synced=%d failed=%d", i, len(skills), synced, failed)
 
-        sd = build_skill_data(skill, base_url, fetch_content=False)
-        try:
-            with driver.session(database=database) as session:
+    with driver.session(database=database) as session:
+        for i, skill in enumerate(skills, 1):
+            if i % 50 == 0:
+                logger.info("  [%d/%d] synced=%d failed=%d", i, len(skills), synced, failed)
+
+            sd = build_skill_data(skill)
+            try:
                 session.execute_write(upsert_skill, sd)
-            synced += 1
-        except Exception:
-            logger.exception("Error syncing %s", skill.get("display_name", skill.get("name", "?")))
-            failed += 1
+                synced += 1
+            except Exception:
+                logger.exception(
+                    "Error syncing %s",
+                    skill.get("display_name") or skill.get("name", "?"),
+                )
+                failed += 1
 
     return synced, failed
 
 
 # ---------------------------------------------------------------------------
-# Step 5: Bootstrap embeddings (optional)
+# Step 4: Bootstrap embeddings (optional)
 # ---------------------------------------------------------------------------
 
 def bootstrap_embeddings(driver: Any, database: str) -> dict[str, int]:
@@ -351,6 +342,7 @@ def bootstrap_embeddings(driver: Any, database: str) -> dict[str, int]:
 
     embed_cfg = get_embedding_config()
     dimension = embed_cfg.get("dimension", 768)
+    embed_failures = 0
 
     with driver.session(database=database) as session:
         logger.info("  Creating vector index (%d dims, cosine)", dimension)
@@ -396,9 +388,10 @@ def bootstrap_embeddings(driver: Any, database: str) -> dict[str, int]:
                 ]
             except Exception:
                 logger.exception("Embedding batch %d-%d failed", i, i + len(batch))
+                embed_failures += 1
                 continue
 
-            for skill, embedding in zip(batch, embeddings, strict=True):
+            for skill, embedding in zip(batch, embeddings):
                 session.run(
                     "MATCH (s:Skill) WHERE elementId(s) = $eid SET s.embedding = $embedding",
                     eid=skill["eid"],
@@ -406,7 +399,10 @@ def bootstrap_embeddings(driver: Any, database: str) -> dict[str, int]:
                 )
             embedded += len(batch)
 
-        logger.info("  Embedded %d skills", embedded)
+        if embed_failures:
+            logger.error("  %d embedding batches failed out of %d",
+                         embed_failures, (len(skills) + batch_size - 1) // batch_size)
+        logger.info("  Embedded %d/%d skills", embedded, len(skills))
         time.sleep(2)
 
         skills_emb = [
@@ -417,6 +413,7 @@ def bootstrap_embeddings(driver: Any, database: str) -> dict[str, int]:
             )
         ]
         similar_count = 0
+        similar_failures = 0
         top_k = 5
         threshold = 0.7
         for skill in skills_emb:
@@ -435,6 +432,8 @@ def bootstrap_embeddings(driver: Any, database: str) -> dict[str, int]:
                     )
                 ]
             except Exception:
+                similar_failures += 1
+                logger.debug("Vector query failed for %s", skill["eid"])
                 continue
 
             for neighbor in neighbors:
@@ -449,15 +448,17 @@ def bootstrap_embeddings(driver: Any, database: str) -> dict[str, int]:
                     )
                     similar_count += 1
                 except Exception:
-                    pass
+                    similar_failures += 1
 
+        if similar_failures:
+            logger.error("  %d SIMILAR_TO operations failed", similar_failures)
         logger.info("  Created %d SIMILAR_TO edges", similar_count)
 
     return {"embedded": embedded, "similar_to": similar_count}
 
 
 # ---------------------------------------------------------------------------
-# Step 6: Validate graph (imported from validate_graph.py)
+# Step 5: Validate graph (imported from validate_graph.py)
 # ---------------------------------------------------------------------------
 
 def run_validation(driver: Any, database: str, check_embeddings: bool) -> dict:
@@ -478,7 +479,7 @@ def run_validation(driver: Any, database: str, check_embeddings: bool) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Step 7: Report
+# Report
 # ---------------------------------------------------------------------------
 
 def collect_stats(driver: Any, database: str) -> dict[str, int]:
@@ -544,6 +545,8 @@ def print_report(stats: dict[str, int], validation: dict | None) -> None:
 # ---------------------------------------------------------------------------
 
 def main() -> None:
+    global _TLS_VERIFY
+
     parser = argparse.ArgumentParser(
         description="Build complete knowledge graph from Skill Catalog into Neo4j"
     )
@@ -563,7 +566,15 @@ def main() -> None:
         "--dry-run", action="store_true",
         help="Fetch and display skills but do not write to Neo4j",
     )
+    parser.add_argument(
+        "--no-tls-verify", action="store_true",
+        help="Disable TLS certificate verification for catalog API (insecure)",
+    )
     args = parser.parse_args()
+
+    if args.no_tls_verify:
+        _TLS_VERIFY = False
+        logger.warning("TLS verification disabled (--no-tls-verify)")
 
     from shared.model_config import get_catalog_config, get_neo4j_config
 
@@ -591,12 +602,14 @@ def main() -> None:
     if args.dry_run:
         logger.info("Dry-run mode: would sync %d skills to Neo4j", len(skills))
         for s in skills[:5]:
-            logger.info("  - %s (%s)", s.get("display_name", s["name"]), s.get("namespace", "?"))
+            logger.info("  - %s (%s)",
+                        s.get("display_name") or s.get("name", "?"),
+                        s.get("namespace", "?"))
         if len(skills) > 5:
             logger.info("  ... and %d more", len(skills) - 5)
         return
 
-    # Step 3+4: Sync to Neo4j (includes content fetch)
+    # Step 3: Sync to Neo4j
     from neo4j import GraphDatabase
 
     driver = GraphDatabase.driver(
@@ -604,37 +617,43 @@ def main() -> None:
         auth=(neo4j_cfg["user"], neo4j_cfg["password"]),
     )
 
-    logger.info("Step 3-4: Syncing %d skills to Neo4j...", len(skills))
-    synced, failed = sync_to_neo4j(skills, base_url, driver, database)
-    logger.info("Synced: %d, Failed: %d", synced, failed)
+    try:
+        logger.info("Step 3: Syncing %d skills to Neo4j...", len(skills))
+        synced, failed = sync_to_neo4j(skills, driver, database)
+        logger.info("Synced: %d, Failed: %d", synced, failed)
 
-    # Step 5: Embeddings
-    embed_stats = {"embedded": 0, "similar_to": 0}
-    if not args.skip_embeddings:
-        logger.info("Step 5: Bootstrapping embeddings...")
-        embed_stats = bootstrap_embeddings(driver, database)
-    else:
-        logger.info("Step 5: Skipped (--skip-embeddings)")
+        # Step 3b: SAME_PLUGIN post-process (single pass)
+        logger.info("Step 3b: Creating SAME_PLUGIN edges (single pass)...")
+        plugin_edges = create_same_plugin_edges(driver, database)
+        logger.info("Created %d SAME_PLUGIN edges", plugin_edges)
 
-    # Step 6: Validate
-    validation = None
-    if not args.skip_validation:
-        logger.info("Step 6: Validating graph...")
-        validation = run_validation(driver, database, check_embeddings=not args.skip_embeddings)
-    else:
-        logger.info("Step 6: Skipped (--skip-validation)")
+        # Step 4: Embeddings
+        embed_stats = {"embedded": 0, "similar_to": 0}
+        if not args.skip_embeddings:
+            logger.info("Step 4: Bootstrapping embeddings...")
+            embed_stats = bootstrap_embeddings(driver, database)
+        else:
+            logger.info("Step 4: Skipped (--skip-embeddings)")
 
-    # Step 7: Report
-    stats = collect_stats(driver, database)
-    stats.update(embed_stats)
-    print_report(stats, validation)
+        # Step 5: Validate
+        validation = None
+        if not args.skip_validation:
+            logger.info("Step 5: Validating graph...")
+            validation = run_validation(driver, database, check_embeddings=not args.skip_embeddings)
+        else:
+            logger.info("Step 5: Skipped (--skip-validation)")
 
-    driver.close()
+        # Step 6: Report
+        stats = collect_stats(driver, database)
+        stats.update(embed_stats)
+        print_report(stats, validation)
+
+    finally:
+        driver.close()
 
     if validation and "error" not in validation:
         checks = validation.get("checks", [])
-        all_passed = all(c["passed"] for c in checks)
-        if not all_passed:
+        if not all(c["passed"] for c in checks):
             sys.exit(1)
 
 

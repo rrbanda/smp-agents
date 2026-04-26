@@ -102,7 +102,7 @@ def validate_graph(
         if extra:
             detail_parts.append(f"extra: {extra}")
         checks.append(_check(
-            f"Domain count matches expected ({len(EXPECTED_DOMAINS)})",
+            f"Expected domains present ({len(EXPECTED_DOMAINS)} required)",
             EXPECTED_DOMAINS.issubset(actual_domains),
             "; ".join(detail_parts) if detail_parts else f"found {len(actual_domains)}",
         ))

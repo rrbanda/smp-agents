@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
-"""Sync skills from the Skill Catalog API into Neo4j (non-destructive).
+"""Sync skills from the Skill Catalog API into Neo4j.
 
 Fetches all skills from the catalog REST API, optionally pulls SKILL.md
 content, and MERGEs them into Neo4j as Skill nodes with associated
-Tag, Domain, and relationship edges.
+Tag, Domain, Tool, and relationship edges.
 
-NEVER deletes existing nodes -- only creates or updates.
+Uses stale edge cleanup + UNWIND batching for correctness and
+performance. SAME_PLUGIN edges are built in a single post-process pass.
 
 Usage:
-    python scripts/sync_catalog_to_neo4j.py [--with-content] [--batch-size 50]
+    python scripts/sync_catalog_to_neo4j.py
+    python scripts/sync_catalog_to_neo4j.py --with-content
 """
 
 from __future__ import annotations
@@ -21,6 +23,7 @@ import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
+from typing import Any
 
 import yaml
 
@@ -57,12 +60,12 @@ def _fetch_all_skills(base_url: str) -> list[dict]:
 
     while True:
         data = _catalog_get(base_url, f"/api/v1/skills?page={page}&per_page={per_page}")
+        if not isinstance(data, dict):
+            logger.error("Unexpected API response type: %s", type(data).__name__)
+            break
         skills = data.get("data", [])
         all_skills.extend(skills)
-
-        pagination = data.get("pagination", {})
-        total = pagination.get("total", 0)
-        if len(all_skills) >= total or not skills:
+        if len(skills) < per_page:
             break
         page += 1
 
@@ -106,8 +109,8 @@ def _parse_tags(tags_json: str) -> list[str]:
         return []
 
 
-def _upsert_skill(tx, skill_data: dict):
-    """MERGE a Skill node and associated Tag, Domain, Tool relationships."""
+def _upsert_skill(tx: Any, skill_data: dict) -> None:
+    """MERGE a Skill node with stale-edge cleanup and UNWIND batching."""
     name = skill_data.get("name")
     if not name:
         return
@@ -159,16 +162,31 @@ def _upsert_skill(tx, skill_data: dict):
             prompt=skill_data["prompt"],
         ).consume()
 
-    for tag in skill_data.get("tags", []):
+    # Delete stale edges before re-creating from current data
+    tx.run(
+        "MATCH (s:Skill {name: $name})-[r:TAGGED_WITH]->() DELETE r",
+        name=name,
+    ).consume()
+    tx.run(
+        "MATCH (s:Skill {name: $name})-[r:BELONGS_TO]->() DELETE r",
+        name=name,
+    ).consume()
+    tx.run(
+        "MATCH (s:Skill {name: $name})-[r:USES_TOOL]->() DELETE r",
+        name=name,
+    ).consume()
+
+    tags = skill_data.get("tags", [])
+    if tags:
         tx.run(
             """
-            MERGE (t:Tag {name: $tag})
-            WITH t
-            MATCH (s:Skill {name: $skill_name})
+            MATCH (s:Skill {name: $name})
+            UNWIND $tags AS tag_name
+            MERGE (t:Tag {name: tag_name})
             MERGE (s)-[:TAGGED_WITH]->(t)
             """,
-            tag=tag,
-            skill_name=name,
+            name=name,
+            tags=tags,
         ).consume()
 
     ns = skill_data.get("namespace", "")
@@ -184,55 +202,60 @@ def _upsert_skill(tx, skill_data: dict):
             skill_name=name,
         ).consume()
 
-    for tool in skill_data.get("tools", []):
-        if tool:
-            tx.run(
-                """
-                MERGE (t:Tool {name: $tool})
-                WITH t
-                MATCH (s:Skill {name: $skill_name})
-                MERGE (s)-[:USES_TOOL]->(t)
-                """,
-                tool=tool,
-                skill_name=name,
-            ).consume()
-
-    plugin = skill_data.get("plugin", "")
-    if plugin:
+    tools = [t for t in skill_data.get("tools", []) if t]
+    if tools:
         tx.run(
             """
-            MATCH (s:Skill {name: $skill_name})
-            MATCH (other:Skill)
-            WHERE other.plugin = $plugin AND other.name <> $skill_name
-            MERGE (s)-[:SAME_PLUGIN]-(other)
+            MATCH (s:Skill {name: $name})
+            UNWIND $tools AS tool_name
+            MERGE (t:Tool {name: tool_name})
+            MERGE (s)-[:USES_TOOL]->(t)
             """,
-            skill_name=name,
-            plugin=plugin,
+            name=name,
+            tools=tools,
         ).consume()
 
-    for bundled_skill in skill_data.get("bundle_skills_list", []):
-        if bundled_skill:
-            tx.run(
-                """
-                MERGE (b:Skill {name: $bundled})
-                WITH b
-                MATCH (s:Skill {name: $parent})
-                MERGE (s)-[:BUNDLES]->(b)
-                """,
-                parent=name,
-                bundled=bundled_skill.strip(),
-            ).consume()
+    bundle_list = [b.strip() for b in skill_data.get("bundle_skills_list", []) if b.strip()]
+    if bundle_list:
+        tx.run(
+            """
+            MATCH (s:Skill {name: $parent})
+            UNWIND $bundled_names AS bname
+            MERGE (b:Skill {name: bname})
+            MERGE (s)-[:BUNDLES]->(b)
+            """,
+            parent=name,
+            bundled_names=bundle_list,
+        ).consume()
 
 
-def main():
+def _create_same_plugin_edges(driver: Any, database: str) -> int:
+    """Single-pass SAME_PLUGIN edge creation after all skills are synced."""
+    with driver.session(database=database) as session:
+        session.run("MATCH ()-[r:SAME_PLUGIN]-() DELETE r").consume()
+
+        result = session.run(
+            """
+            MATCH (a:Skill), (b:Skill)
+            WHERE a.plugin IS NOT NULL AND a.plugin <> ''
+              AND a.plugin = b.plugin AND id(a) < id(b)
+            MERGE (a)-[:SAME_PLUGIN]-(b)
+            RETURN count(*) AS created
+            """
+        )
+        record = result.single()
+        return record["created"] if record else 0
+
+
+def main() -> None:
     parser = argparse.ArgumentParser(description="Sync Skill Catalog API into Neo4j")
     parser.add_argument("--with-content", action="store_true", help="Also fetch SKILL.md content for each skill")
-    parser.add_argument("--batch-size", type=int, default=50, help="Neo4j transaction batch size")
     args = parser.parse_args()
 
     catalog_cfg = get_catalog_config()
     neo4j_cfg = get_neo4j_config()
     base_url = catalog_cfg["base_url"]
+    database = neo4j_cfg.get("database", "neo4j")
 
     logger.info("Catalog API: %s", base_url)
     logger.info("Fetching all skills from catalog...")
@@ -249,64 +272,77 @@ def main():
         auth=(neo4j_cfg["user"], neo4j_cfg["password"]),
     )
 
-    synced = 0
-    failed = 0
+    try:
+        synced = 0
+        failed = 0
 
-    for i, skill in enumerate(skills, 1):
-        if i % 50 == 0:
-            logger.info("[%d/%d] synced=%d failed=%d", i, len(skills), synced, failed)
+        with driver.session(database=database) as session:
+            for i, skill in enumerate(skills, 1):
+                if i % 50 == 0:
+                    logger.info("[%d/%d] synced=%d failed=%d", i, len(skills), synced, failed)
 
-        tags = _parse_tags(skill.get("tags_json", ""))
-        bundle_skills = skill.get("bundle_skills", "").split(",") if skill.get("bundle_skills") else []
+                tags = _parse_tags(skill.get("tags_json", ""))
+                bundle_skills = (
+                    skill.get("bundle_skills", "").split(",") if skill.get("bundle_skills") else []
+                )
 
-        skill_data = {
-            "name": skill.get("display_name", skill["name"]),
-            "description": skill.get("description", ""),
-            "namespace": skill.get("namespace", ""),
-            "version": skill.get("version", ""),
-            "status": skill.get("status", ""),
-            "display_name": skill.get("display_name", skill["name"]),
-            "authors": skill.get("authors", ""),
-            "license": skill.get("license", ""),
-            "compatibility": skill.get("compatibility", ""),
-            "category": skill.get("compatibility", ""),
-            "plugin": skill.get("plugin", ""),
-            "lang": skill.get("lang", ""),
-            "tools": skill.get("tools", []),
-            "bundle": skill.get("bundle", False),
-            "word_count": skill.get("word_count", 0),
-            "digest": skill.get("digest", ""),
-            "repository": skill.get("repository", ""),
-            "tags": tags,
-            "bundle_skills_list": bundle_skills,
-        }
+                skill_data: dict[str, Any] = {
+                    "name": skill.get("display_name") or skill.get("name", ""),
+                    "description": skill.get("description", ""),
+                    "namespace": skill.get("namespace", ""),
+                    "version": skill.get("version", ""),
+                    "status": skill.get("status", ""),
+                    "display_name": skill.get("display_name") or skill.get("name", ""),
+                    "authors": skill.get("authors", ""),
+                    "license": skill.get("license", ""),
+                    "compatibility": skill.get("compatibility", ""),
+                    "category": skill.get("category", skill.get("compatibility", "")),
+                    "plugin": skill.get("plugin", ""),
+                    "lang": skill.get("lang", ""),
+                    "tools": skill.get("tools") or [],
+                    "bundle": skill.get("bundle", False),
+                    "word_count": skill.get("word_count", 0),
+                    "digest": skill.get("digest", ""),
+                    "repository": skill.get("repository", ""),
+                    "tags": [t for t in tags if t],
+                    "bundle_skills_list": [b.strip() for b in bundle_skills if b.strip()],
+                }
 
-        if args.with_content and skill.get("version"):
-            content = _fetch_skill_content(base_url, skill.get("namespace", ""), skill["name"], skill["version"])
-            if content:
-                skill_data["prompt"] = content
-                fm = _parse_frontmatter(content)
-                if fm.get("plugin"):
-                    skill_data["plugin"] = fm["plugin"]
-                if fm.get("lang"):
-                    skill_data["lang"] = fm["lang"]
-                if fm.get("tools"):
-                    skill_data["tools"] = fm["tools"]
-                if fm.get("category"):
-                    skill_data["category"] = fm["category"]
-                if fm.get("tags") and not tags:
-                    skill_data["tags"] = fm["tags"]
+                if args.with_content and skill.get("version"):
+                    content = _fetch_skill_content(
+                        base_url, skill.get("namespace", ""), skill["name"], skill["version"]
+                    )
+                    if content:
+                        skill_data["prompt"] = content
+                        fm = _parse_frontmatter(content)
+                        if fm.get("plugin") and not skill_data["plugin"]:
+                            skill_data["plugin"] = fm["plugin"]
+                        if fm.get("lang") and not skill_data["lang"]:
+                            skill_data["lang"] = fm["lang"]
+                        if fm.get("tools") and not skill_data["tools"]:
+                            skill_data["tools"] = fm["tools"]
+                        if fm.get("category") and not skill_data["category"]:
+                            skill_data["category"] = fm["category"]
+                        if fm.get("tags") and not tags:
+                            skill_data["tags"] = fm["tags"]
 
-        try:
-            with driver.session(database=neo4j_cfg.get("database", "neo4j")) as session:
-                session.execute_write(_upsert_skill, skill_data)
-            synced += 1
-        except Exception:
-            logger.exception("Error syncing %s", skill["name"])
-            failed += 1
+                try:
+                    session.execute_write(_upsert_skill, skill_data)
+                    synced += 1
+                except Exception:
+                    logger.exception("Error syncing %s", skill.get("display_name") or skill.get("name", "?"))
+                    failed += 1
 
-    driver.close()
-    logger.info("Done. Synced: %d, Failed: %d, Total: %d", synced, failed, len(skills))
+        logger.info("Synced: %d, Failed: %d, Total: %d", synced, failed, len(skills))
+
+        logger.info("Creating SAME_PLUGIN edges (single pass)...")
+        plugin_edges = _create_same_plugin_edges(driver, database)
+        logger.info("Created %d SAME_PLUGIN edges", plugin_edges)
+
+    finally:
+        driver.close()
+
+    logger.info("Done.")
 
 
 if __name__ == "__main__":
