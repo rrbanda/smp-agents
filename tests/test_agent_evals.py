@@ -22,6 +22,7 @@ AGENTS = [
     "kg_qa",
     "playground",
     "skill_builder",
+    "payment_ops",
 ]
 
 

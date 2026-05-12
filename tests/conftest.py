@@ -114,6 +114,7 @@ _AGENT_PORTS = {
     "kg_qa": 8003,
     "playground": 8004,
     "skill_builder": 8005,
+    "payment_ops": 8006,
 }
 
 E2E_BASE = os.environ.get("E2E_BASE_URL", "http://localhost")

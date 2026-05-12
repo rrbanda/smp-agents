@@ -1,0 +1,40 @@
+{
+  "skill_name": "exception-repair",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Diagnose payment exception EXC-2024-0847 which has a missing beneficiary BIC.",
+      "expected_output": "The agent should identify the missing BIC in the MT103 :57A field, look up the correct BIC from the beneficiary IBAN country (Germany -> DEUTDEFF), check the fraud score, cite the 97% auto-repair success rate, and recommend adding DEUTDEFF as the beneficiary bank BIC.",
+      "assertions": [
+        "The output identifies the missing BIC as the root cause",
+        "The output mentions DEUTDEFF or Deutsche Bank as the correct BIC",
+        "The output includes a fraud risk assessment",
+        "The output cites historical repair success rate",
+        "The output recommends human approval before executing the repair"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Check the sanctions hold on exception EXC-2024-0853 for Ahmed Holdings LLC.",
+      "expected_output": "The agent should screen Ahmed Holdings LLC, find a low-confidence fuzzy match (score 0.31) against the OFAC SDN list, note the transliteration differences (Ahmed vs Ahmad), and assess it as a likely false positive while noting that compliance officer sign-off is mandatory.",
+      "assertions": [
+        "The output identifies this as a likely false positive",
+        "The output mentions the match score of 0.31",
+        "The output notes transliteration differences between Ahmed and Ahmad",
+        "The output states that compliance officer sign-off is required",
+        "The output does not recommend automatic release without human review"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Investigate the duplicate payment exception EXC-2024-0856.",
+      "expected_output": "The agent should identify that this is a duplicate of PAY-20250513-0631-NORCGB2L, note the same reference/amount/beneficiary, and recommend rejecting the duplicate while confirming the original payment should proceed.",
+      "assertions": [
+        "The output identifies the original payment reference PAY-20250513-0631-NORCGB2L",
+        "The output confirms this is an exact duplicate",
+        "The output recommends rejecting the duplicate submission",
+        "The output confirms the original payment should proceed"
+      ]
+    }
+  ]
+}

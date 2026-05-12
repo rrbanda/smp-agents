@@ -183,6 +183,8 @@ jobs:
             dockerfile: Dockerfile.playground
           - agent: skill-builder
             dockerfile: Dockerfile.skill-builder
+          - agent: payment-ops
+            dockerfile: Dockerfile.payment-ops
     steps:
       - uses: actions/checkout@v4
 

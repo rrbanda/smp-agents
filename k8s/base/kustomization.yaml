@@ -33,3 +33,7 @@ resources:
   - skill-builder/serviceaccount.yaml
   - skill-builder/deployment.yaml
   - skill-builder/service.yaml
+  # Payment Ops
+  - payment-ops/serviceaccount.yaml
+  - payment-ops/deployment.yaml
+  - payment-ops/service.yaml

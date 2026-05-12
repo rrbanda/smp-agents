@@ -1,0 +1,71 @@
+{
+  "eval_set_id": "payment_ops_sanctions_triage",
+  "name": "Payment Ops - Sanctions Hit Triage",
+  "description": "Validates that the agent correctly triages a sanctions screening hold by checking the entity against watchlists, evaluating the match quality, and recommending appropriate action while noting compliance requirements.",
+  "eval_cases": [
+    {
+      "eval_id": "diagnose_exc_0853",
+      "conversation": [
+        {
+          "invocation_id": "e-po-san-001",
+          "user_content": {
+            "parts": [
+              {
+                "text": "Check the sanctions hold on EXC-2024-0853."
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "## Diagnosis: EXC-2024-0853 — Sanctions Screening Hold\n\n**Root cause**: Beneficiary name \"Ahmed Holdings LLC\" triggered a partial match against the OFAC SDN list entry \"AHMAD HOLDINGS (Dubai, UAE)\" with a match score of 0.31.\n\n**Evidence**:\n- Sanctions screening: fuzzy name match (score 0.31), matched against SDN-29471\n- Key differences: 'Ahmed' vs 'Ahmad' (transliteration variant), LLC in Abu Dhabi vs listed entity in Dubai, no matching aliases or addresses\n- Payment: EUR 87,500.00 from Meridian Partners SA to Ahmed Holdings LLC (Abu Dhabi)\n- Fraud score: 0.18 (low risk) — Meridian Partners has 156 clean transactions in 12 months\n- Historical data: 91% of sanctions holds are released as false positives after compliance review\n\n**Assessment**: Likely FALSE POSITIVE — the name match is a common Arabic transliteration variant, jurisdictions differ (Abu Dhabi vs Dubai), and there is no address or alias overlap.\n\n**Recommended action**: `release_false_positive` — Release payment after compliance officer review\n**Confidence**: MEDIUM (low match score of 0.31, but sanctions decisions always require human sign-off)\n**Requires human approval**: YES — MANDATORY per policy CP-BSA-012\n**Compliance notes**: Sanctions decisions require compliance officer sign-off per BSA/AML policy. This analysis is advisory only."
+              }
+            ],
+            "role": "model"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "name": "get_exception_detail",
+                "args": {
+                  "exception_id": "EXC-2024-0853"
+                }
+              },
+              {
+                "name": "get_payment_message",
+                "args": {
+                  "payment_reference": "MT103-REF-20250513-C"
+                }
+              },
+              {
+                "name": "check_sanctions_status",
+                "args": {
+                  "entity_name": "Ahmed Holdings LLC"
+                }
+              },
+              {
+                "name": "get_fraud_score",
+                "args": {
+                  "payment_reference": "MT103-REF-20250513-C"
+                }
+              },
+              {
+                "name": "get_repair_history",
+                "args": {
+                  "exception_type": "sanctions_hold"
+                }
+              }
+            ],
+            "intermediate_responses": []
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "payment_ops",
+        "user_id": "eval_user",
+        "state": {}
+      }
+    }
+  ]
+}

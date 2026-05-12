@@ -1,0 +1,65 @@
+{
+  "eval_set_id": "payment_ops_detect_duplicate",
+  "name": "Payment Ops - Detect Duplicate Payment",
+  "description": "Validates that the agent correctly identifies a duplicate payment by examining the payment message, checking fraud score, and recommending rejection with a link to the original.",
+  "eval_cases": [
+    {
+      "eval_id": "diagnose_exc_0856",
+      "conversation": [
+        {
+          "invocation_id": "e-po-dup-001",
+          "user_content": {
+            "parts": [
+              {
+                "text": "Investigate exception EXC-2024-0856."
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "## Diagnosis: EXC-2024-0856 — Duplicate Payment Detected\n\n**Root cause**: Payment MT103-REF-20250513-D (GBP 23,750.00 to BlueSky Consulting Ltd) is a duplicate of PAY-20250513-0631-NORCGB2L submitted at 06:31 today. Same reference, amount, and beneficiary.\n\n**Evidence**:\n- Exception detail shows original_payment_id: PAY-20250513-0631-NORCGB2L\n- MT103 message note confirms: \"Duplicate of PAY-20250513-0631-NORCGB2L submitted at 06:31 today\"\n- Time gap: 4 hours 14 minutes between submissions\n- Fraud score: 0.07 (low risk)\n- Historical data: duplicate_payment exceptions have 85% auto-repair rate; 79% are rejected as exact duplicates\n\n**Recommended action**: `reject_duplicate` — Reject this submission; original payment PAY-20250513-0631-NORCGB2L should proceed\n**Confidence**: HIGH (exact duplicate with matching reference, amount, and beneficiary)\n**Requires human approval**: Yes\n**Compliance notes**: None — duplicate rejection is policy-allowed"
+              }
+            ],
+            "role": "model"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "name": "get_exception_detail",
+                "args": {
+                  "exception_id": "EXC-2024-0856"
+                }
+              },
+              {
+                "name": "get_payment_message",
+                "args": {
+                  "payment_reference": "MT103-REF-20250513-D"
+                }
+              },
+              {
+                "name": "get_fraud_score",
+                "args": {
+                  "payment_reference": "MT103-REF-20250513-D"
+                }
+              },
+              {
+                "name": "get_repair_history",
+                "args": {
+                  "exception_type": "duplicate_payment"
+                }
+              }
+            ],
+            "intermediate_responses": []
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "payment_ops",
+        "user_id": "eval_user",
+        "state": {}
+      }
+    }
+  ]
+}

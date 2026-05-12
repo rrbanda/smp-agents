@@ -6,7 +6,7 @@ model:
   embedding:
     id: "vllm-embedding/nomic-embed-text-v1-5"
     dimension: 768
-    api_base: "${EMBEDDING_API_BASE:-https://llamastack-llamastack.apps.ocp.v7hjl.sandbox2288.opentlc.com/v1}"
+    api_base: "${EMBEDDING_API_BASE:-https://llamastack-llamastack.apps.cluster-6crhb.6crhb.sandbox1011.opentlc.com/v1}"
 
 neo4j:
   uri: "${NEO4J_URI:-bolt://neo4j.skills-marketplace.svc.cluster.local:7687}"
@@ -16,10 +16,10 @@ neo4j:
   database: "neo4j"
 
 catalog:
-  base_url: "${SKILL_CATALOG_URL:-https://skillctl-catalog-skill-catalog.apps.ocp.v7hjl.sandbox2288.opentlc.com}"
+  base_url: "${SKILL_CATALOG_URL:-}"
 
 oci:
-  registry_url: "${OCI_REGISTRY_URL:-https://default-route-openshift-image-registry.apps.ocp.v7hjl.sandbox2288.opentlc.com}"
+  registry_url: "${OCI_REGISTRY_URL:-}"
   namespace: "team1"
   cache_ttl_seconds: 300
 
@@ -70,5 +70,13 @@ agents:
     description: "Generates new skill specifications from user descriptions and publishes to OCI."
     host: "0.0.0.0"
     port: 8005
+    a2a:
+      version: "0.1.0"
+
+  payment_ops:
+    name: "payment_ops"
+    description: "Diagnoses and repairs payment exceptions using multi-system data and predictive models."
+    host: "0.0.0.0"
+    port: 8006
     a2a:
       version: "0.1.0"

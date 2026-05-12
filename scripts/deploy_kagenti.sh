@@ -4,10 +4,10 @@ set -euo pipefail
 # Deploy all 5 SMP agents to Kagenti on OpenShift.
 # Prereqs: oc login, git repo pushed to GitHub
 
-KEYCLOAK_URL="${KEYCLOAK_URL:-https://keycloak-keycloak.apps.ocp.v7hjl.sandbox2288.opentlc.com}"
-KAGENTI_API="${KAGENTI_API:-https://kagenti-api-kagenti-system.apps.ocp.v7hjl.sandbox2288.opentlc.com}"
+KEYCLOAK_URL="${KEYCLOAK_URL:-https://keycloak-keycloak.apps.cluster-6crhb.6crhb.sandbox1011.opentlc.com}"
+KAGENTI_API="${KAGENTI_API:-https://kagenti-api-kagenti-system.apps.cluster-6crhb.6crhb.sandbox1011.opentlc.com}"
 KEYCLOAK_USER="${KEYCLOAK_USER:-temp-admin}"
-KEYCLOAK_PASSWORD="${KEYCLOAK_PASSWORD:-4454edeff4ee4470bdf29deb612e30c1}"
+KEYCLOAK_PASSWORD="${KEYCLOAK_PASSWORD:-294a22d0eecd438f99a3559929f8066e}"
 NAMESPACE="${NAMESPACE:-smp-agents}"
 GIT_REPO="${GIT_REPO:-https://github.com/rrbanda/smp-agents.git}"
 GIT_BRANCH="${GIT_BRANCH:-main}"
@@ -32,6 +32,7 @@ AGENTS[bundle-validator]="Dockerfile.bundle-validator"
 AGENTS[kg-qa]="Dockerfile.kg-qa"
 AGENTS[playground]="Dockerfile.playground"
 AGENTS[skill-builder]="Dockerfile.skill-builder"
+AGENTS[payment-ops]="Dockerfile.payment-ops"
 
 for AGENT_NAME in "${!AGENTS[@]}"; do
     DOCKERFILE="${AGENTS[$AGENT_NAME]}"
@@ -83,7 +84,7 @@ echo "=== Verifying agent cards ==="
 sleep 5
 
 for AGENT_NAME in "${!AGENTS[@]}"; do
-    AGENT_URL="https://${AGENT_NAME}-${NAMESPACE}.apps.ocp.v7hjl.sandbox2288.opentlc.com"
+    AGENT_URL="https://${AGENT_NAME}-${NAMESPACE}.apps.cluster-6crhb.6crhb.sandbox1011.opentlc.com"
     echo -n "  ${AGENT_NAME}: "
     HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${AGENT_URL}/.well-known/agent-card.json" 2>/dev/null || echo "000")
     if [ "$HTTP_CODE" = "200" ]; then

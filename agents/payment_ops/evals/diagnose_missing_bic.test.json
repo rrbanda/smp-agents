@@ -1,0 +1,101 @@
+{
+  "eval_set_id": "payment_ops_diagnose_missing_bic",
+  "name": "Payment Ops - Diagnose Missing BIC",
+  "description": "Validates that the agent correctly diagnoses a missing beneficiary BIC exception by pulling the MT103 message, looking up counterparty info, checking fraud score, and recommending a BIC repair.",
+  "eval_cases": [
+    {
+      "eval_id": "diagnose_exc_0847",
+      "conversation": [
+        {
+          "invocation_id": "e-po-001",
+          "user_content": {
+            "parts": [
+              {
+                "text": "Show me today's exception queue."
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "Here are the current pending payment exceptions:\n\n1. **EXC-2024-0847** (HIGH) - Missing Beneficiary BIC - USD 125,000.00 - Schmidt Manufacturing GmbH\n2. **EXC-2024-0851** (CRITICAL) - Amount Mismatch - USD 50,000.00 - Tanaka Industries Ltd\n3. **EXC-2024-0853** (HIGH) - Sanctions Screening Hold - EUR 87,500.00 - Ahmed Holdings LLC\n4. **EXC-2024-0856** (MEDIUM) - Duplicate Payment Detected - GBP 23,750.00 - BlueSky Consulting Ltd"
+              }
+            ],
+            "role": "model"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "name": "get_exception_queue",
+                "args": {
+                  "status": "pending"
+                }
+              }
+            ],
+            "intermediate_responses": []
+          }
+        },
+        {
+          "invocation_id": "e-po-002",
+          "user_content": {
+            "parts": [
+              {
+                "text": "Diagnose exception EXC-2024-0847."
+              }
+            ],
+            "role": "user"
+          },
+          "final_response": {
+            "parts": [
+              {
+                "text": "## Diagnosis: EXC-2024-0847 — Missing Beneficiary BIC\n\n**Root cause**: The SWIFT MT103 field :57A (Account With Institution) is empty. The beneficiary Schmidt Manufacturing GmbH has a German IBAN (DE89370400440532013000) but no BIC was provided for the beneficiary bank.\n\n**Evidence**:\n- Payment message MT103-REF-20250513-A shows :57A field is \"(EMPTY - MISSING BIC)\"\n- Counterparty lookup for DEUTDEFF confirms Deutsche Bank AG in Frankfurt is active and SWIFT-connected\n- German IBAN prefix DE89 3704 maps to Deutsche Bank (BLZ 37040044)\n- Fraud score: 0.03 (low risk) — ACME Corp has 847 clean transactions in 12 months\n- Historical data: missing_bic exceptions have 97% auto-repair success rate over 147 cases in the last 90 days\n\n**Recommended action**: `add_bic` — Set :57A to DEUTDEFF (Deutsche Bank AG, Frankfurt)\n**Confidence**: HIGH (97% historical success rate for this pattern)\n**Requires human approval**: Yes\n**Compliance notes**: No policy restrictions on BIC auto-repair"
+              }
+            ],
+            "role": "model"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "name": "get_exception_detail",
+                "args": {
+                  "exception_id": "EXC-2024-0847"
+                }
+              },
+              {
+                "name": "get_payment_message",
+                "args": {
+                  "payment_reference": "MT103-REF-20250513-A"
+                }
+              },
+              {
+                "name": "get_counterparty_info",
+                "args": {
+                  "bic_code": "DEUTDEFF"
+                }
+              },
+              {
+                "name": "get_fraud_score",
+                "args": {
+                  "payment_reference": "MT103-REF-20250513-A"
+                }
+              },
+              {
+                "name": "get_repair_history",
+                "args": {
+                  "exception_type": "missing_bic"
+                }
+              }
+            ],
+            "intermediate_responses": []
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "payment_ops",
+        "user_id": "eval_user",
+        "state": {}
+      }
+    }
+  ]
+}

@@ -35,6 +35,7 @@ packages = [
     "agents/kg_qa",
     "agents/playground",
     "agents/skill_builder",
+    "agents/payment_ops",
 ]
 
 [build-system]

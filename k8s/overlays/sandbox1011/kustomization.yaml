@@ -7,6 +7,9 @@ resources:
 
 patches:
   - path: patches/authbridge-runtime-config-override.yaml
+  - path: patches/configmap-override.yaml
+  - path: patches/secret-override.yaml
+  - path: patches/keycloak-secret-override.yaml
 
 images:
   - name: ghcr.io/rrbanda/smp-agents/skill-advisor

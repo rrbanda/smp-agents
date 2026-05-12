@@ -35,6 +35,7 @@ AGENT_SKILL_DIRS: dict[str, str] = {
     "kg_qa": "agents/kg_qa/skills/kg-qa",
     "bundle_validator": "agents/bundle_validator/skills/bundle-validator",
     "playground": "agents/playground/skills/playground-runtime",
+    "payment_ops": "agents/payment_ops/skills/exception-repair",
 }
 
 AGENT_PORTS: dict[str, int] = {
@@ -43,6 +44,7 @@ AGENT_PORTS: dict[str, int] = {
     "kg_qa": 8003,
     "playground": 8004,
     "skill_builder": 8005,
+    "payment_ops": 8006,
 }
 
 
